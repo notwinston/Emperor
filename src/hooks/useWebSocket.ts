@@ -17,7 +17,7 @@ export function useWebSocket() {
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const { setStatus, addMessage, updateMessage, setTyping } =
+  const { setStatus, addMessage, upsertStreamingMessage, setTyping } =
     useConversationStore();
 
   const handleMessage = useCallback(
@@ -28,26 +28,14 @@ export function useWebSocket() {
         switch (data.event_type) {
           case "assistant.message": {
             const payload = data.payload as unknown as AssistantMessagePayload;
-            if (payload.is_streaming) {
-              // Update existing streaming message
-              updateMessage(
-                payload.message_id,
-                payload.content,
-                payload.is_complete
-              );
-            } else {
-              // Add new message
-              addMessage({
-                id: payload.message_id,
-                role: "assistant",
-                content: payload.content,
-                timestamp: new Date(data.timestamp),
-                metadata: {
-                  isStreaming: !payload.is_complete,
-                  messageId: payload.message_id,
-                },
-              });
-            }
+
+            // Use upsert for all streaming messages (creates if not exists, updates if exists)
+            upsertStreamingMessage(
+              payload.message_id,
+              payload.content,
+              payload.is_complete ?? false
+            );
+
             if (payload.is_complete) {
               setTyping(false);
             }
@@ -62,20 +50,45 @@ export function useWebSocket() {
 
           case "error": {
             const payload = data.payload as unknown as ErrorPayload;
-            console.error("WebSocket error:", payload.message);
-            addMessage({
-              id: generateId(),
-              role: "system",
-              content: `Error: ${payload.message}`,
-              timestamp: new Date(),
-            });
+            const errorCode = payload.code || "UNKNOWN";
+            const errorMessage = payload.message || "An unknown error occurred";
+            const isRecoverable = payload.recoverable !== false;
+
+            console.error(`WebSocket error [${errorCode}]:`, errorMessage);
+
+            // Only show user-facing errors (skip internal/debug errors)
+            if (errorCode !== "INTERNAL_ERROR" || !isRecoverable) {
+              addMessage({
+                id: generateId(),
+                role: "system",
+                content: `⚠️ ${errorMessage}`,
+                timestamp: new Date(),
+                metadata: {
+                  errorCode,
+                  recoverable: isRecoverable,
+                },
+              });
+            }
+
             setTyping(false);
             break;
           }
 
-          case "heartbeat":
-            // Respond to heartbeat if needed
+          case "heartbeat": {
+            // Respond to server's heartbeat ping with pong
+            const payload = data.payload as { status?: string };
+            if (payload.status === "ping" && wsRef.current?.readyState === WebSocket.OPEN) {
+              const pongEvent: WSEvent = {
+                event_id: generateId(),
+                event_type: "heartbeat",
+                source: "frontend",
+                timestamp: new Date().toISOString(),
+                payload: { status: "pong" },
+              };
+              wsRef.current.send(JSON.stringify(pongEvent));
+            }
             break;
+          }
 
           default:
             console.log("Unknown event type:", data.event_type);
@@ -84,7 +97,7 @@ export function useWebSocket() {
         console.error("Failed to parse WebSocket message:", error);
       }
     },
-    [addMessage, updateMessage, setTyping]
+    [addMessage, upsertStreamingMessage, setTyping]
   );
 
   const connect = useCallback(() => {

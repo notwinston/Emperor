@@ -22,6 +22,11 @@ interface ConversationState {
   setStatus: (status: ConnectionStatus) => void;
   addMessage: (message: Message) => void;
   updateMessage: (id: string, content: string, isComplete?: boolean) => void;
+  upsertStreamingMessage: (
+    id: string,
+    content: string,
+    isComplete: boolean
+  ) => void;
   setTyping: (isTyping: boolean) => void;
   clearMessages: () => void;
   setCurrentConversation: (id: string | null) => void;
@@ -60,6 +65,43 @@ export const useConversationStore = create<ConversationState>((set) => ({
           : msg
       ),
     })),
+
+  upsertStreamingMessage: (id, content, isComplete) =>
+    set((state) => {
+      const existingMessage = state.messages.find((msg) => msg.id === id);
+
+      if (existingMessage) {
+        // Update existing message
+        return {
+          messages: state.messages.map((msg) =>
+            msg.id === id
+              ? {
+                  ...msg,
+                  content,
+                  metadata: {
+                    ...msg.metadata,
+                    isStreaming: !isComplete,
+                  },
+                }
+              : msg
+          ),
+        };
+      } else {
+        // Create new message
+        const newMessage: Message = {
+          id,
+          role: "assistant",
+          content,
+          timestamp: new Date(),
+          metadata: {
+            isStreaming: !isComplete,
+          },
+        };
+        return {
+          messages: [...state.messages, newMessage],
+        };
+      }
+    }),
 
   setTyping: (isTyping) => set({ isTyping }),
 

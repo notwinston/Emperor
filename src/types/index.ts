@@ -33,6 +33,8 @@ export interface MessageMetadata {
   model?: string;
   isStreaming?: boolean;
   messageId?: string;
+  errorCode?: string;
+  recoverable?: boolean;
 }
 
 /**
@@ -111,6 +113,7 @@ export interface TypingPayload {
 export interface ErrorPayload {
   code: string;
   message: string;
+  recoverable?: boolean;
   details?: Record<string, unknown>;
 }
 
