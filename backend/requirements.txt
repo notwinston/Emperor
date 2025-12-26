@@ -14,3 +14,6 @@ anyio==4.12.0
 
 # Anthropic SDK (for Domain Leads & Workers)
 anthropic>=0.40.0
+
+# Memory System
+mem0ai>=0.1.0
