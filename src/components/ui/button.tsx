@@ -4,20 +4,31 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-all duration-200 ease-out focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
+        // Primary: Gold gradient with dark text
         default:
-          "bg-primary text-primary-foreground shadow hover:bg-primary/90",
+          "bg-gradient-to-br from-gold-primary via-gold-accent to-gold-dark text-black-primary shadow-md hover:shadow-lg hover:shadow-gold-primary/25 hover:from-gold-accent hover:via-gold-primary hover:to-gold-dark active:scale-[0.98]",
+        // Destructive: Red with gold accent
         destructive:
-          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
+          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90 hover:shadow-md",
+        // Outline: Gold border with transparent background
         outline:
-          "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground",
+          "border border-gold-primary bg-transparent text-gold-primary shadow-sm hover:bg-gold-primary/10 hover:shadow-gold-primary/20 hover:shadow-md",
+        // Secondary: Dark background with gold text
         secondary:
-          "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
+          "bg-black-tertiary text-gold-text border border-black-elevated shadow-sm hover:bg-black-elevated hover:border-gold-dark hover:shadow-gold-primary/10",
+        // Ghost: Subtle gold hover effect
+        ghost:
+          "text-gold-text hover:bg-gold-primary/10 hover:text-gold-light",
+        // Link: Gold underline
+        link:
+          "text-gold-primary underline-offset-4 hover:underline hover:text-gold-accent",
+        // Premium: Gold with intense glow effect
+        premium:
+          "bg-gradient-to-br from-gold-primary via-gold-accent to-gold-dark text-black-primary shadow-lg shadow-gold-primary/30 hover:shadow-xl hover:shadow-gold-primary/40 hover:from-gold-accent hover:via-gold-light hover:to-gold-primary active:scale-[0.98]",
       },
       size: {
         default: "h-9 px-4 py-2",

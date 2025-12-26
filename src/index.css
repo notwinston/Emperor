@@ -23,6 +23,18 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
+  /* Gold Colors */
+  --color-gold-primary: var(--gold-primary);
+  --color-gold-light: var(--gold-light);
+  --color-gold-dark: var(--gold-dark);
+  --color-gold-accent: var(--gold-accent);
+  --color-gold-text: var(--gold-text);
+
+  /* Black Colors */
+  --color-black-primary: var(--black-primary);
+  --color-black-secondary: var(--black-secondary);
+  --color-black-tertiary: var(--black-tertiary);
+
   /* Border Radius */
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
@@ -30,6 +42,9 @@
 
   /* Animation */
   --animate-subtle-pulse: subtle-pulse 2s ease-in-out infinite;
+  --animate-gold-pulse: gold-pulse 1.5s ease-in-out infinite;
+  --animate-gold-glow: gold-glow 2s ease-in-out infinite;
+  --animate-typing-dot: typing-dot 1.4s ease-in-out infinite;
 }
 
 @keyframes subtle-pulse {
@@ -41,54 +56,136 @@
   }
 }
 
-/* CSS Variables for Light Mode */
+/* Gold pulsing animation for microphone recording */
+@keyframes gold-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.7);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 12px rgba(212, 175, 55, 0);
+  }
+}
+
+/* Gold glow animation */
+@keyframes gold-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(212, 175, 55, 0.4), 0 0 40px rgba(212, 175, 55, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.6), 0 0 60px rgba(255, 215, 0, 0.3);
+  }
+}
+
+/* Typing indicator dots */
+@keyframes typing-dot {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.6;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+/* ============================================
+   CSS Variables - Premium Gold & Black Theme
+   Dark mode is the primary and only theme
+   ============================================ */
+
 :root {
-  --background: hsl(0 0% 100%);
-  --foreground: hsl(222.2 84% 4.9%);
-  --card: hsl(0 0% 100%);
-  --card-foreground: hsl(222.2 84% 4.9%);
-  --popover: hsl(0 0% 100%);
-  --popover-foreground: hsl(222.2 84% 4.9%);
-  --primary: hsl(222.2 47.4% 11.2%);
-  --primary-foreground: hsl(210 40% 98%);
-  --secondary: hsl(210 40% 96.1%);
-  --secondary-foreground: hsl(222.2 47.4% 11.2%);
-  --muted: hsl(210 40% 96.1%);
-  --muted-foreground: hsl(215.4 16.3% 46.9%);
-  --accent: hsl(210 40% 96.1%);
-  --accent-foreground: hsl(222.2 47.4% 11.2%);
-  --destructive: hsl(0 84.2% 60.2%);
-  --destructive-foreground: hsl(210 40% 98%);
-  --border: hsl(214.3 31.8% 91.4%);
-  --input: hsl(214.3 31.8% 91.4%);
-  --ring: hsl(222.2 84% 4.9%);
+  /* Gold Palette */
+  --gold-primary: #D4AF37;
+  --gold-light: #F4E4BA;
+  --gold-dark: #B8860B;
+  --gold-accent: #FFD700;
+  --gold-text: #E5C87A;
+  --gold-muted: #A89050;
+
+  /* Black Palette */
+  --black-primary: #0A0A0A;
+  --black-secondary: #1A1A1A;
+  --black-tertiary: #2D2D2D;
+  --black-elevated: #3A3A3A;
+
+  /* Semantic Colors - Premium Gold & Black */
+  --background: #0A0A0A;
+  --foreground: #F4E4BA;
+  --card: #1A1A1A;
+  --card-foreground: #F4E4BA;
+  --popover: #1A1A1A;
+  --popover-foreground: #F4E4BA;
+  --primary: #D4AF37;
+  --primary-foreground: #0A0A0A;
+  --secondary: #2D2D2D;
+  --secondary-foreground: #E5C87A;
+  --muted: #2D2D2D;
+  --muted-foreground: #A89050;
+  --accent: #B8860B;
+  --accent-foreground: #F4E4BA;
+  --destructive: #DC2626;
+  --destructive-foreground: #F4E4BA;
+  --border: #3A3A3A;
+  --input: #2D2D2D;
+  --ring: #D4AF37;
   --radius: 0.5rem;
+
+  /* Gold Gradients */
+  --gold-gradient: linear-gradient(135deg, #D4AF37 0%, #FFD700 50%, #B8860B 100%);
+  --gold-gradient-hover: linear-gradient(135deg, #FFD700 0%, #D4AF37 50%, #B8860B 100%);
+  --gold-gradient-subtle: linear-gradient(135deg, rgba(212, 175, 55, 0.15) 0%, rgba(255, 215, 0, 0.08) 100%);
+
+  /* Premium Shadows */
+  --shadow-gold-sm: 0 0 10px rgba(212, 175, 55, 0.3);
+  --shadow-gold-md: 0 0 20px rgba(212, 175, 55, 0.4);
+  --shadow-gold-lg: 0 0 30px rgba(212, 175, 55, 0.5);
+  --shadow-gold-glow: 0 0 15px rgba(212, 175, 55, 0.6), 0 0 30px rgba(212, 175, 55, 0.3);
 }
 
-/* CSS Variables for Dark Mode */
+/* Dark class for compatibility - inherits from :root */
 .dark {
-  --background: hsl(222.2 84% 4.9%);
-  --foreground: hsl(210 40% 98%);
-  --card: hsl(222.2 84% 4.9%);
-  --card-foreground: hsl(210 40% 98%);
-  --popover: hsl(222.2 84% 4.9%);
-  --popover-foreground: hsl(210 40% 98%);
-  --primary: hsl(210 40% 98%);
-  --primary-foreground: hsl(222.2 47.4% 11.2%);
-  --secondary: hsl(217.2 32.6% 17.5%);
-  --secondary-foreground: hsl(210 40% 98%);
-  --muted: hsl(217.2 32.6% 17.5%);
-  --muted-foreground: hsl(215 20.2% 65.1%);
-  --accent: hsl(217.2 32.6% 17.5%);
-  --accent-foreground: hsl(210 40% 98%);
-  --destructive: hsl(0 62.8% 30.6%);
-  --destructive-foreground: hsl(210 40% 98%);
-  --border: hsl(217.2 32.6% 17.5%);
-  --input: hsl(217.2 32.6% 17.5%);
-  --ring: hsl(212.7 26.8% 83.9%);
+  /* Gold Palette */
+  --gold-primary: #D4AF37;
+  --gold-light: #F4E4BA;
+  --gold-dark: #B8860B;
+  --gold-accent: #FFD700;
+  --gold-text: #E5C87A;
+  --gold-muted: #A89050;
+
+  /* Black Palette */
+  --black-primary: #0A0A0A;
+  --black-secondary: #1A1A1A;
+  --black-tertiary: #2D2D2D;
+  --black-elevated: #3A3A3A;
+
+  /* Semantic Colors */
+  --background: #0A0A0A;
+  --foreground: #F4E4BA;
+  --card: #1A1A1A;
+  --card-foreground: #F4E4BA;
+  --popover: #1A1A1A;
+  --popover-foreground: #F4E4BA;
+  --primary: #D4AF37;
+  --primary-foreground: #0A0A0A;
+  --secondary: #2D2D2D;
+  --secondary-foreground: #E5C87A;
+  --muted: #2D2D2D;
+  --muted-foreground: #A89050;
+  --accent: #B8860B;
+  --accent-foreground: #F4E4BA;
+  --destructive: #DC2626;
+  --destructive-foreground: #F4E4BA;
+  --border: #3A3A3A;
+  --input: #2D2D2D;
+  --ring: #D4AF37;
 }
 
-/* Base Layer Styles */
+/* ============================================
+   Base Layer Styles
+   ============================================ */
+
 @layer base {
   * {
     @apply border-border;
@@ -97,6 +194,8 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   /* Full height for Tauri window */
@@ -115,26 +214,89 @@
     -webkit-user-select: text;
     user-select: text;
   }
+
+  /* Premium Typography */
+  h1, h2, h3, h4, h5, h6 {
+    color: var(--gold-light);
+    font-weight: 600;
+    letter-spacing: -0.025em;
+  }
+
+  h1 {
+    font-size: 2.25rem;
+    line-height: 2.5rem;
+  }
+
+  h2 {
+    font-size: 1.875rem;
+    line-height: 2.25rem;
+  }
+
+  h3 {
+    font-size: 1.5rem;
+    line-height: 2rem;
+  }
+
+  h4 {
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+  }
+
+  h5 {
+    font-size: 1.125rem;
+    line-height: 1.75rem;
+  }
+
+  h6 {
+    font-size: 1rem;
+    line-height: 1.5rem;
+  }
+
+  /* Text selection with gold */
+  ::selection {
+    background-color: rgba(212, 175, 55, 0.3);
+    color: var(--gold-light);
+  }
+
+  ::-moz-selection {
+    background-color: rgba(212, 175, 55, 0.3);
+    color: var(--gold-light);
+  }
 }
 
-/* Custom Scrollbar for Dark Mode */
-.dark ::-webkit-scrollbar {
+/* ============================================
+   Premium Custom Scrollbar - Gold Theme
+   ============================================ */
+
+::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
-.dark ::-webkit-scrollbar-track {
-  background: hsl(217.2 32.6% 12%);
+::-webkit-scrollbar-track {
+  background: var(--black-secondary);
   border-radius: 4px;
 }
 
-.dark ::-webkit-scrollbar-thumb {
-  background: hsl(217.2 32.6% 25%);
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--gold-dark) 0%, var(--gold-primary) 100%);
   border-radius: 4px;
+  border: 1px solid var(--black-tertiary);
 }
 
-.dark ::-webkit-scrollbar-thumb:hover {
-  background: hsl(217.2 32.6% 35%);
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--gold-primary) 0%, var(--gold-accent) 100%);
+  box-shadow: 0 0 8px rgba(212, 175, 55, 0.4);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--black-secondary);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--gold-primary) var(--black-secondary);
 }
 
 /* Tauri Window Drag Region */
@@ -146,9 +308,358 @@
   -webkit-app-region: no-drag;
 }
 
-/* Focus Visible for Accessibility */
+/* ============================================
+   Focus States - Premium Gold Ring
+   ============================================ */
+
 @layer base {
   :focus-visible {
-    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+    @apply outline-none;
+    box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--gold-primary), 0 0 10px rgba(212, 175, 55, 0.3);
   }
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Premium Gold Glow Utilities */
+.gold-glow {
+  box-shadow: 0 0 20px rgba(212, 175, 55, 0.3), 0 0 40px rgba(212, 175, 55, 0.1);
+}
+
+.gold-glow-intense {
+  box-shadow: 0 0 30px rgba(255, 215, 0, 0.5), 0 0 60px rgba(212, 175, 55, 0.3);
+}
+
+/* Premium Message Bubble Styles */
+.message-bubble-user {
+  background: linear-gradient(135deg, #D4AF37 0%, #B8860B 100%);
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.2);
+}
+
+.message-bubble-assistant {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 100%);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Crown icon shimmer effect */
+.crown-shimmer {
+  background: linear-gradient(90deg, #D4AF37 0%, #FFD700 50%, #D4AF37 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: shimmer 3s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0%, 100% {
+    background-position: 200% center;
+  }
+  50% {
+    background-position: 0% center;
+  }
+}
+
+/* Microphone button states */
+.mic-idle {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 100%);
+  border: 2px solid #D4AF37;
+  transition: all 0.2s ease-out;
+}
+
+.mic-idle:hover {
+  background: linear-gradient(135deg, #2D2D2D 0%, #3D3D3D 100%);
+  box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+}
+
+.mic-recording {
+  background: linear-gradient(135deg, #D4AF37 0%, #FFD700 100%);
+  animation: gold-pulse 1.5s ease-in-out infinite;
+}
+
+.mic-processing {
+  background: linear-gradient(135deg, #B8860B 0%, #D4AF37 100%);
+  animation: gold-glow 2s ease-in-out infinite;
+}
+
+/* Premium Sidebar Styles */
+.sidebar-gradient {
+  background: linear-gradient(180deg, #1E1E1E 0%, #121212 50%, #0A0A0A 100%);
+}
+
+.sidebar-header-gradient {
+  background: linear-gradient(90deg, rgba(212, 175, 55, 0.05) 0%, transparent 100%);
+}
+
+/* Gold Hover Effect for Nav Items */
+.nav-item-hover {
+  position: relative;
+  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.nav-item-hover::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--gold-primary);
+  opacity: 0;
+  transition: opacity 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.nav-item-hover:hover::before,
+.nav-item-hover.active::before {
+  opacity: 1;
+}
+
+.nav-item-hover:hover {
+  background: rgba(212, 175, 55, 0.08);
+}
+
+.nav-item-hover.active {
+  background: rgba(212, 175, 55, 0.12);
+}
+
+/* Premium Button with Gold Border */
+.btn-gold-outline {
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  background: transparent;
+  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-gold-outline:hover {
+  border-color: var(--gold-primary);
+  background: rgba(212, 175, 55, 0.1);
+  box-shadow: 0 0 12px rgba(212, 175, 55, 0.2);
+}
+
+/* Status Bar Styles */
+.status-indicator {
+  position: relative;
+}
+
+.status-indicator.connected {
+  background: var(--gold-primary);
+  box-shadow: 0 0 8px rgba(212, 175, 55, 0.5);
+}
+
+.status-indicator.connected::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1px solid var(--gold-primary);
+  opacity: 0;
+  animation: status-ring-pulse 2s ease-out infinite;
+}
+
+@keyframes status-ring-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+.status-indicator.connecting {
+  background: #F4E4BA;
+  animation: connecting-pulse 1s ease-in-out infinite;
+}
+
+@keyframes connecting-pulse {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.status-indicator.disconnected {
+  background: #4A4A4A;
+}
+
+.status-indicator.error {
+  background: #8B3A3A;
+  box-shadow: 0 0 8px rgba(139, 58, 58, 0.5);
+}
+
+/* Welcome Screen Styles */
+.welcome-container {
+  animation: fade-in-up 0.6s ease-out forwards;
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.crown-icon {
+  filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.4));
+  animation: crown-float 4s ease-in-out infinite;
+}
+
+@keyframes crown-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.welcome-title {
+  background: linear-gradient(135deg, #F4E4BA 0%, #D4AF37 50%, #F4E4BA 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradient-shift 4s ease-in-out infinite;
+}
+
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% center;
+  }
+  50% {
+    background-position: 200% center;
+  }
+}
+
+.welcome-subtitle {
+  color: #A0A0A0;
+  transition: color 300ms ease;
+}
+
+.welcome-container:hover .welcome-subtitle {
+  color: #E5C87A;
+}
+
+/* Typing Indicator Premium Styles */
+.typing-container {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 100%);
+  border: 1px solid rgba(212, 175, 55, 0.15);
+  border-radius: 16px;
+}
+
+.typing-dot-gold {
+  background: var(--gold-primary);
+  box-shadow: 0 0 6px rgba(212, 175, 55, 0.4);
+  animation: typing-dot 1.4s ease-in-out infinite;
+}
+
+.typing-dot-gold:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.typing-dot-gold:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dot-gold:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* Sidebar Collapse Animation */
+.sidebar-collapse-transition {
+  transition: width 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Emperor Logo Text */
+.emperor-logo-text {
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  background: linear-gradient(135deg, #F4E4BA 0%, #D4AF37 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
+}
+
+/* Divider with Gold Accent */
+.divider-gold {
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(212, 175, 55, 0.3) 50%, transparent 100%);
+}
+
+/* Premium Shadow Utilities */
+.shadow-emperor {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4),
+              0 2px 4px -2px rgba(0, 0, 0, 0.3);
+}
+
+.shadow-emperor-lg {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5),
+              0 4px 6px -4px rgba(0, 0, 0, 0.4);
+}
+
+/* Icon Gold Hover */
+.icon-gold-hover {
+  transition: color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              filter 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.icon-gold-hover:hover {
+  color: var(--gold-primary);
+  filter: drop-shadow(0 0 4px rgba(212, 175, 55, 0.4));
+}
+
+/* Fade In Animation Utility */
+.fade-in {
+  animation: fade-in 0.3s ease-out forwards;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Smooth scale transition for interactive elements */
+.scale-hover {
+  transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.scale-hover:hover {
+  transform: scale(1.02);
+}
+
+.scale-hover:active {
+  transform: scale(0.98);
+}
+
+/* Gold text gradient utility */
+.text-gold-gradient {
+  background: linear-gradient(135deg, var(--gold-light) 0%, var(--gold-primary) 50%, var(--gold-dark) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Premium border glow on focus */
+.focus-gold-glow:focus-within {
+  box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--gold-primary), 0 0 15px rgba(212, 175, 55, 0.3);
 }
