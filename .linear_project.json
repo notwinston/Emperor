@@ -1,0 +1,51 @@
+{
+  "initialized": true,
+  "created_at": "2025-12-26T02:55:00.000Z",
+  "team_id": "dc166204-e5fc-4245-a9b9-a3e2eaafc0b1",
+  "team_name": "AGI_Wins",
+  "project_id": "93aad8c5-45a6-498f-9bb1-ff3e65c0792b",
+  "project_name": "Emperor Frontend - Premium UI/UX Development",
+  "project_url": "https://linear.app/agi495/project/emperor-frontend-premium-uiux-development-b9a5fbea013f",
+  "meta_issue_id": "6241313c-84e3-4a81-8905-a57e80f3bc1b",
+  "meta_issue_identifier": "AGI-156",
+  "issues": {
+    "P1_urgent": [
+      {"id": "8f51fdcf-ebe2-41b3-8e7b-c0d50a015357", "identifier": "AGI-135", "title": "Premium Gold & Black Theme System"},
+      {"id": "11504947-5833-4126-be1e-2a5acd8b51f9", "identifier": "AGI-136", "title": "Premium Chat Interface Layout"},
+      {"id": "c751cbb3-38d2-4068-877c-a0ee582c5836", "identifier": "AGI-138", "title": "Premium Input Area with Microphone"},
+      {"id": "81d7d56b-f415-48ad-8548-cbce615e8266", "identifier": "AGI-152", "title": "Microphone Button Placement on Chat Side"}
+    ],
+    "P2_high": [
+      {"id": "aac3c2fe-751d-45e2-b598-667210f2a974", "identifier": "AGI-137", "title": "Premium Sidebar Navigation"},
+      {"id": "096331fa-0ef0-4d01-bcf4-99d1c58395d5", "identifier": "AGI-139", "title": "Microphone Recording Visual Feedback"},
+      {"id": "cef1f4d8-124d-4a51-83c1-7701a95264d5", "identifier": "AGI-140", "title": "Premium Status Bar Design"},
+      {"id": "d774f245-d2d8-4d98-82f8-eedeb0b22a12", "identifier": "AGI-141", "title": "Premium Typography System"},
+      {"id": "8282c9e8-542d-4f6c-a1ca-ac685cbf228c", "identifier": "AGI-142", "title": "Premium Button Components"},
+      {"id": "2c4be477-b64c-470f-854c-966e1bb2121e", "identifier": "AGI-143", "title": "Premium Input Components"},
+      {"id": "ac5daf34-f357-4c16-ac4c-db618f53a729", "identifier": "AGI-148", "title": "Gold Glow Effects & Shadows"},
+      {"id": "83b325ca-1093-4077-a593-91e614f13c73", "identifier": "AGI-149", "title": "Smooth Animations & Transitions"},
+      {"id": "7eaba9ea-87a0-4dc7-b791-48aeb78b6fba", "identifier": "AGI-150", "title": "Message Markdown Rendering"},
+      {"id": "cb1d1d21-21d1-4509-ba14-7c27203b7624", "identifier": "AGI-154", "title": "Visual QA with Puppeteer Screenshots"},
+      {"id": "72f0e9a3-cd86-41fe-9977-038c8350e435", "identifier": "AGI-155", "title": "Emperor Crown Logo/Icon"}
+    ],
+    "P3_medium": [
+      {"id": "2d512304-64d6-4f9d-b596-b57e3addf867", "identifier": "AGI-144", "title": "Premium ScrollArea with Custom Scrollbar"},
+      {"id": "aa622329-6021-4f77-a53c-0be2f1eca09a", "identifier": "AGI-145", "title": "Premium Welcome Screen"},
+      {"id": "2dd4e5b6-d3dd-4bbd-9fe4-f1515bbcfe14", "identifier": "AGI-146", "title": "Premium Typing Indicator Animation"},
+      {"id": "fc4c33da-12ae-4c75-934d-5b3dca962eed", "identifier": "AGI-147", "title": "Premium Avatar System"},
+      {"id": "644aacfb-6f43-468c-940c-4384756f776d", "identifier": "AGI-151", "title": "Responsive Window Sizing"},
+      {"id": "e62b21eb-7aef-49cf-8166-db11610f4603", "identifier": "AGI-153", "title": "Premium Loading States"}
+    ]
+  },
+  "color_palette": {
+    "primary_gold": "#D4AF37",
+    "light_gold": "#F4E4BA",
+    "dark_gold": "#B8860B",
+    "accent_gold": "#FFD700",
+    "text_gold": "#E5C87A",
+    "primary_black": "#0A0A0A",
+    "secondary_black": "#1A1A1A",
+    "tertiary_black": "#2D2D2D"
+  },
+  "notes": "Project initialized by Initializer agent. Focus on extremely polished, premium frontend with gold and black theme. Microphone should be prominently placed on side of chat."
+}
