@@ -57,17 +57,35 @@ start_backend() {
 
     cd "$PROJECT_ROOT"
 
-    # Wait for backend to be ready
+    # Wait for backend to be ready with health check
     echo -e "Waiting for backend to start..."
-    sleep 2
 
-    # Check if backend is running
-    if ! kill -0 $BACKEND_PID 2>/dev/null; then
-        echo -e "${RED}Error: Backend failed to start!${NC}"
+    MAX_WAIT=30
+    WAITED=0
+
+    while [ $WAITED -lt $MAX_WAIT ]; do
+        # Check if process is still running
+        if ! kill -0 $BACKEND_PID 2>/dev/null; then
+            echo -e "${RED}Error: Backend process died!${NC}"
+            exit 1
+        fi
+
+        # Try health check
+        if curl -s http://127.0.0.1:8765/health > /dev/null 2>&1; then
+            echo -e "${GREEN}Backend running on http://127.0.0.1:8765${NC}"
+            break
+        fi
+
+        sleep 1
+        WAITED=$((WAITED + 1))
+        echo -e "  Waiting... ($WAITED/$MAX_WAIT)"
+    done
+
+    if [ $WAITED -ge $MAX_WAIT ]; then
+        echo -e "${RED}Error: Backend failed to start within ${MAX_WAIT}s!${NC}"
+        kill $BACKEND_PID 2>/dev/null || true
         exit 1
     fi
-
-    echo -e "${GREEN}Backend running on http://127.0.0.1:8765${NC}"
 }
 
 # Start Tauri frontend

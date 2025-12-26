@@ -17,6 +17,17 @@ from claude_code_bridge import (
     CLINotInstalledError,
     AuthenticationError,
 )
+from orchestrator import get_orchestrator, DelegationType
+from process_manager import (
+    init_event_bus,
+    shutdown_event_bus,
+    init_ui_streamer,
+    shutdown_ui_streamer,
+    get_event_bus,
+    Event,
+    EventType as PMEventType,
+    Priority,
+)
 
 logger = get_logger(__name__)
 
@@ -189,6 +200,24 @@ async def send_error(
         logger.error(f"Failed to send error to client: {e}")
 
 
+async def broadcast_to_frontend(event_data: dict) -> None:
+    """
+    Broadcast an event to all connected frontend clients.
+
+    This function is passed to the UIEventStreamer to enable
+    forwarding of internal events to the WebSocket connections.
+
+    Args:
+        event_data: The event data to broadcast
+    """
+    # Convert to BaseEvent format expected by WebSocket manager
+    event = BaseEvent(
+        event_type=event_data.get("event_type", "unknown"),
+        payload=event_data.get("payload", {}),
+    )
+    await manager.broadcast(event)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handle application startup and shutdown."""
@@ -196,6 +225,22 @@ async def lifespan(app: FastAPI):
     logger.info(f"Starting {settings.app_name}")
     logger.info(f"Server running on {settings.host}:{settings.port}")
     logger.info(f"Debug mode: {settings.debug}")
+
+    # Initialize Event Bus
+    try:
+        event_bus = await init_event_bus()
+        logger.info("Event Bus initialized successfully")
+
+        # Initialize UI Event Streamer
+        await init_ui_streamer(
+            event_bus=event_bus,
+            broadcast_func=broadcast_to_frontend,
+            rate_limit_ms=100,
+        )
+        logger.info("UI Event Streamer initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize Event Bus: {e}")
+        raise
 
     # Verify Claude Code Bridge
     try:
@@ -216,6 +261,14 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down server...")
+
+    # Shutdown UI Streamer first (it depends on Event Bus)
+    await shutdown_ui_streamer()
+    logger.info("UI Event Streamer stopped")
+
+    # Shutdown Event Bus
+    await shutdown_event_bus()
+    logger.info("Event Bus stopped")
 
 
 app = FastAPI(
@@ -238,12 +291,19 @@ app.add_middleware(
 async def health_check():
     """Health check endpoint for monitoring."""
     bridge = get_bridge()
+    event_bus = get_event_bus()
     return {
         "status": "healthy",
         "app": settings.app_name,
         "connections": manager.connection_count,
         "queued_messages": message_processor.total_queued,
         "claude_bridge": bridge.status,
+        "event_bus": {
+            "running": event_bus.is_running,
+            "subscriptions": event_bus.subscription_count,
+            "queue_size": event_bus.queue_size,
+            "stats": event_bus.stats,
+        },
     }
 
 
@@ -297,6 +357,9 @@ async def handle_user_message(websocket: WebSocket, payload: dict) -> None:
     """
     Handle incoming user messages.
 
+    Routes messages through the Orchestrator which uses Claude Code CLI
+    for intent classification and response generation.
+
     Args:
         websocket: The client's WebSocket connection
         payload: The message payload containing content
@@ -329,20 +392,81 @@ async def handle_user_message(websocket: WebSocket, payload: dict) -> None:
             ),
         )
 
-        # Small delay before starting response
-        await asyncio.sleep(0.3)
+        # Get orchestrator and check bridge status
+        orchestrator = get_orchestrator()
+        bridge = get_bridge()
 
-        # Placeholder echo response (Claude Code Bridge integration later)
-        response_content = f"You said: {content}. This is a streaming response from Emperor AI Assistant. Each word appears progressively to demonstrate the streaming capability."
+        # Check if bridge is verified (Claude Code CLI available)
+        if bridge.is_verified:
+            # Use real AI via Claude Code CLI
+            logger.debug("Processing via Claude Code Bridge...")
 
-        # Send streaming response
-        await send_streaming_response(
-            websocket,
-            message_id,
-            response_content,
-            chunk_size=3,  # Words per chunk
-            delay=0.08,    # Delay between chunks
-        )
+            # Stream response from orchestrator
+            accumulated_response = ""
+            is_first_chunk = True
+
+            async for chunk in orchestrator.process_stream(content):
+                accumulated_response += chunk
+
+                # Send streaming update
+                await manager.send(
+                    websocket,
+                    BaseEvent(
+                        event_type=EventType.ASSISTANT_MESSAGE,
+                        payload={
+                            "message_id": message_id,
+                            "content": accumulated_response,
+                            "is_streaming": True,
+                            "is_complete": False,
+                        },
+                    ),
+                )
+
+                is_first_chunk = False
+
+            # Send final complete message
+            await manager.send(
+                websocket,
+                BaseEvent(
+                    event_type=EventType.ASSISTANT_MESSAGE,
+                    payload={
+                        "message_id": message_id,
+                        "content": accumulated_response,
+                        "is_streaming": False,
+                        "is_complete": True,
+                    },
+                ),
+            )
+
+            # Check for delegation (for future Domain Lead integration)
+            result = orchestrator._parse_response(accumulated_response)
+            if result.delegation != DelegationType.NONE:
+                logger.info(
+                    f"Delegation detected: {result.delegation.value} - {result.delegation_task}"
+                )
+                # TODO: When Domain Leads are implemented (Part 10),
+                # call orchestrator.delegate_to_lead() here
+
+        else:
+            # Fallback: Bridge not available, use echo mode
+            logger.warning("Claude Code Bridge not verified, using fallback echo mode")
+
+            response_content = (
+                f"[Echo Mode - Claude Code CLI not available]\n\n"
+                f"You said: {content}\n\n"
+                f"To enable AI responses, ensure Claude Code CLI is installed and authenticated:\n"
+                f"1. Install: npm install -g @anthropic-ai/claude-code\n"
+                f"2. Login: claude auth login"
+            )
+
+            # Send as streaming response for consistent UX
+            await send_streaming_response(
+                websocket,
+                message_id,
+                response_content,
+                chunk_size=5,
+                delay=0.05,
+            )
 
     except asyncio.TimeoutError:
         logger.error("Timeout while generating response")
@@ -350,6 +474,15 @@ async def handle_user_message(websocket: WebSocket, payload: dict) -> None:
             websocket,
             ErrorCode.TIMEOUT,
             "Response generation timed out. Please try again.",
+        )
+
+    except BridgeError as e:
+        logger.error(f"Bridge error: {e}")
+        await send_error(
+            websocket,
+            ErrorCode.PROCESSING_ERROR,
+            f"AI service error: {e}",
+            recoverable=True,
         )
 
     except Exception as e:
@@ -395,6 +528,55 @@ async def handle_heartbeat(websocket: WebSocket, payload: dict) -> None:
         )
 
 
+async def handle_approval_response(websocket: WebSocket, payload: dict) -> None:
+    """
+    Handle approval response from the user.
+
+    Publishes the approval response to the Event Bus so the waiting
+    agent can proceed or handle denial.
+
+    Args:
+        websocket: The client's WebSocket connection
+        payload: The approval response payload
+    """
+    from datetime import datetime, timezone
+
+    request_id = payload.get("request_id")
+    approved = payload.get("approved", False)
+    reason = payload.get("reason")
+
+    if not request_id:
+        await send_error(
+            websocket,
+            ErrorCode.MISSING_FIELD,
+            "Missing required field: request_id",
+        )
+        return
+
+    # Determine event type based on approval status
+    event_type = PMEventType.APPROVAL_GRANTED if approved else PMEventType.APPROVAL_DENIED
+
+    # Create and publish the approval response event
+    event = Event(
+        type=event_type,
+        source="user",
+        data={
+            "request_id": request_id,
+            "approved": approved,
+            "reason": reason,
+            "responded_at": datetime.now(timezone.utc).isoformat(),
+        },
+        correlation_id=request_id,  # Use request_id as correlation
+        priority=Priority.HIGH,
+    )
+
+    # Publish to Event Bus
+    event_bus = get_event_bus()
+    await event_bus.publish(event)
+
+    logger.info(f"Approval response published: {request_id} - {'approved' if approved else 'denied'}")
+
+
 async def route_message(websocket: WebSocket, data: dict) -> None:
     """
     Route incoming messages to appropriate handlers.
@@ -411,6 +593,8 @@ async def route_message(websocket: WebSocket, data: dict) -> None:
             await handle_user_message(websocket, payload)
         case "heartbeat":
             await handle_heartbeat(websocket, payload)
+        case "approval.response":
+            await handle_approval_response(websocket, payload)
         case _:
             logger.warning(f"Unknown event type: {event_type}")
             await send_error(

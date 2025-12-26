@@ -1,4 +1,5 @@
 import { useConversationStore } from "@/stores/conversationStore";
+import { useWebSocket } from "@/hooks/useWebSocket";
 import { cn } from "@/lib/utils";
 
 // Small Crown Icon for Status Bar
@@ -28,6 +29,7 @@ function MiniCrownIcon({ className }: { className?: string }) {
 
 export function StatusBar() {
   const { status } = useConversationStore();
+  const { reconnect } = useWebSocket();
 
   const statusConfig = {
     connected: {
@@ -35,24 +37,28 @@ export function StatusBar() {
       text: "Emperor Online",
       textClass: "text-gold-text",
       showCrown: true,
+      showRetry: false,
     },
     connecting: {
       indicatorClass: "status-indicator connecting",
       text: "Awakening...",
       textClass: "text-gold-light/70",
       showCrown: false,
+      showRetry: false,
     },
     disconnected: {
       indicatorClass: "status-indicator disconnected",
       text: "Dormant",
       textClass: "text-muted-foreground",
       showCrown: false,
+      showRetry: true,
     },
     error: {
       indicatorClass: "status-indicator error",
       text: "Connection Lost",
       textClass: "text-red-400/80",
       showCrown: false,
+      showRetry: true,
     },
   };
 
@@ -85,6 +91,16 @@ export function StatusBar() {
           >
             {config.text}
           </span>
+
+          {/* Retry button for error/disconnected states */}
+          {config.showRetry && (
+            <button
+              onClick={reconnect}
+              className="ml-2 text-xs text-gold-primary/70 hover:text-gold-primary underline underline-offset-2 transition-colors"
+            >
+              Retry
+            </button>
+          )}
         </div>
       </div>
 
