@@ -1,5 +1,4 @@
 import { useConversationStore } from "@/stores/conversationStore";
-import { useWebSocket } from "@/hooks/useWebSocket";
 import { cn } from "@/lib/utils";
 
 // Small Crown Icon for Status Bar
@@ -27,9 +26,12 @@ function MiniCrownIcon({ className }: { className?: string }) {
   );
 }
 
-export function StatusBar() {
+interface StatusBarProps {
+  reconnect: () => void;
+}
+
+export function StatusBar({ reconnect }: StatusBarProps) {
   const { status } = useConversationStore();
-  const { reconnect } = useWebSocket();
 
   const statusConfig = {
     connected: {

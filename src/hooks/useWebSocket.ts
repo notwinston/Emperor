@@ -22,12 +22,14 @@ import type {
 } from "@/types";
 
 interface VoiceCallbacks {
-  /** Called when transcription is received */
+  /** Called when transcription is received (for input field mode) */
   onTranscription?: (text: string) => void;
   /** Called when TTS audio completes */
   onTTSComplete?: () => void;
   /** Called on voice error */
   onVoiceError?: (error: string, stage: "transcription" | "synthesis") => void;
+  /** Called to set text in the input field (default behavior) */
+  onSetInputText?: (text: string) => void;
 }
 
 const WS_URL = "ws://127.0.0.1:8765/ws";
@@ -46,8 +48,13 @@ export function useWebSocket(voiceCallbacks?: VoiceCallbacks) {
   const { setStatus, addMessage, upsertStreamingMessage, setTyping } =
     useConversationStore();
 
-  // Audio player for TTS playback
+  // Audio player for TTS playback - use ref to avoid dependency issues
   const audioPlayer = useAudioPlayer();
+  const audioPlayerRef = useRef(audioPlayer);
+  audioPlayerRef.current = audioPlayer;
+
+  // Ref for TTS request function (to call from handleMessage)
+  const requestTTSRef = useRef<(text: string) => void>(() => {});
 
   const handleMessage = useCallback(
     (event: MessageEvent) => {
@@ -68,6 +75,12 @@ export function useWebSocket(voiceCallbacks?: VoiceCallbacks) {
 
             if (payload.is_complete) {
               setTyping(false);
+
+              // Auto-read response aloud if enabled
+              const { autoReadResponses } = useConversationStore.getState();
+              if (autoReadResponses && payload.content.trim()) {
+                requestTTSRef.current(payload.content);
+              }
             }
             break;
           }
@@ -267,7 +280,26 @@ export function useWebSocket(voiceCallbacks?: VoiceCallbacks) {
           // ===== Voice Events =====
           case "voice.transcription": {
             const payload = data.payload as unknown as VoiceTranscriptionPayload;
-            console.log(`[Voice] Transcribed: ${payload.text}`);
+            console.log(`[Voice] Transcribed: ${payload.text}, auto_send: ${payload.auto_send}`);
+
+            if (payload.text.trim()) {
+              if (payload.auto_send) {
+                // Auto-send mode: add as user message directly
+                addMessage({
+                  id: generateId(),
+                  role: "user",
+                  content: payload.text,
+                  timestamp: new Date(),
+                  metadata: {
+                    isVoice: true,
+                  },
+                });
+              } else {
+                // Default: put in input field for editing
+                voiceCallbacksRef.current?.onSetInputText?.(payload.text);
+              }
+            }
+
             voiceCallbacksRef.current?.onTranscription?.(payload.text);
             break;
           }
@@ -275,7 +307,7 @@ export function useWebSocket(voiceCallbacks?: VoiceCallbacks) {
           case "voice.audio_chunk": {
             const payload = data.payload as unknown as VoiceAudioChunkPayload;
             console.log(`[Voice] Audio chunk received (${payload.format})`);
-            audioPlayer.playChunk(payload.audio);
+            audioPlayerRef.current.playChunk(payload.audio);
             break;
           }
 
@@ -310,7 +342,7 @@ export function useWebSocket(voiceCallbacks?: VoiceCallbacks) {
         console.error("Failed to parse WebSocket message:", error);
       }
     },
-    [addMessage, upsertStreamingMessage, setTyping, audioPlayer]
+    [addMessage, upsertStreamingMessage, setTyping]
   );
 
   const connect = useCallback(() => {
@@ -519,12 +551,15 @@ export function useWebSocket(voiceCallbacks?: VoiceCallbacks) {
     console.log(`[Voice] Requested TTS for: ${text.slice(0, 50)}...`);
   }, []);
 
+  // Keep requestTTS ref updated for use in handleMessage
+  requestTTSRef.current = requestTTS;
+
   /**
    * Stop TTS playback
    */
   const stopTTS = useCallback(() => {
-    audioPlayer.stop();
-  }, [audioPlayer]);
+    audioPlayerRef.current.stop();
+  }, []);
 
   // Auto-connect on mount
   useEffect(() => {

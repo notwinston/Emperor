@@ -35,6 +35,8 @@ export interface MessageMetadata {
   messageId?: string;
   errorCode?: string;
   recoverable?: boolean;
+  /** Whether this message was from voice input */
+  isVoice?: boolean;
 }
 
 /**
@@ -328,6 +330,8 @@ export interface VoiceTranscriptionPayload {
   text: string;
   language?: string;
   duration_seconds?: number;
+  /** If true, message was auto-sent. If false, put in input field for editing. */
+  auto_send?: boolean;
 }
 
 /**
@@ -342,7 +346,7 @@ export interface VoiceTTSPayload {
  */
 export interface VoiceAudioChunkPayload {
   audio: string; // Base64 encoded audio chunk
-  format: string; // Audio format (mp3)
+  format: string; // Audio format (wav from Kokoro TTS)
 }
 
 /**

@@ -28,7 +28,7 @@ from process_manager import (
     EventType as PMEventType,
     Priority,
 )
-from voice import get_voice_handler
+from voice import get_voice_handler, get_stt
 
 logger = get_logger(__name__)
 
@@ -258,6 +258,30 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Claude Code Bridge error: {e}")
         logger.warning("Running in limited mode (echo responses only)")
 
+    # Preload Whisper model for faster first transcription
+    # Using "base" model for speed (142MB, very fast, good accuracy)
+    # Options: tiny (fastest), base (fast), small (balanced), medium (accurate)
+    try:
+        logger.info("Preloading Whisper STT model (base)...")
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, lambda: get_stt("base"))
+        logger.info("Whisper model preloaded successfully")
+    except Exception as e:
+        logger.warning(f"Failed to preload Whisper model: {e}")
+        logger.warning("Model will load on first voice request")
+
+    # Preload Kokoro TTS model for faster first synthesis
+    # Downloads ~80MB model from Hugging Face on first run
+    try:
+        from voice.tts import get_tts
+        logger.info("Preloading Kokoro TTS model...")
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, lambda: get_tts())
+        logger.info("Kokoro TTS model preloaded successfully")
+    except Exception as e:
+        logger.warning(f"Failed to preload Kokoro TTS model: {e}")
+        logger.warning("Model will load on first TTS request")
+
     yield
 
     # Shutdown
@@ -305,6 +329,78 @@ async def health_check():
             "queue_size": event_bus.queue_size,
             "stats": event_bus.stats,
         },
+    }
+
+
+# =============================================================================
+# Voice API Endpoints
+# =============================================================================
+
+
+@app.get("/api/voices")
+async def list_voices():
+    """
+    Get all available Kokoro TTS voices.
+
+    Returns:
+        List of voice objects with id, name, gender, and language
+    """
+    from voice.tts import get_available_voices
+
+    voices = get_available_voices()
+    return {
+        "voices": [
+            {
+                "id": voice_id,
+                "name": info["name"],
+                "gender": info["gender"],
+                "language": info["lang"],
+            }
+            for voice_id, info in voices.items()
+        ]
+    }
+
+
+@app.post("/api/voice/set")
+async def set_voice(voice_id: str):
+    """
+    Set the TTS voice.
+
+    Args:
+        voice_id: Kokoro voice ID (e.g., af_heart, am_adam)
+
+    Returns:
+        Status and current voice ID
+    """
+    handler = get_voice_handler()
+
+    if handler.set_tts_voice(voice_id):
+        return {"status": "ok", "voice": voice_id}
+
+    return {"status": "error", "message": f"Unknown voice: {voice_id}"}
+
+
+@app.get("/api/voice/current")
+async def get_current_voice():
+    """
+    Get the currently selected TTS voice.
+
+    Returns:
+        Current voice ID and info
+    """
+    from voice.tts import get_available_voices
+
+    handler = get_voice_handler()
+    voice_id = handler.tts_voice
+    voices = get_available_voices()
+
+    voice_info = voices.get(voice_id, {})
+
+    return {
+        "voice_id": voice_id,
+        "name": voice_info.get("name", "Unknown"),
+        "gender": voice_info.get("gender", "unknown"),
+        "language": voice_info.get("lang", "Unknown"),
     }
 
 
@@ -582,15 +678,17 @@ async def handle_voice_audio(websocket: WebSocket, payload: dict) -> None:
     """
     Handle incoming voice audio from frontend.
 
-    Transcribes audio using local Whisper (FREE) and optionally
-    processes the transcribed text as a user message.
+    Transcribes audio using local Whisper (FREE) and sends
+    the transcription back to the frontend. The frontend decides
+    whether to auto-send or put in input field for editing.
 
     Args:
         websocket: The client's WebSocket connection
-        payload: Contains base64 audio and format
+        payload: Contains base64 audio, format, and auto_send flag
     """
     audio_b64 = payload.get("audio", "")
     audio_format = payload.get("format", "webm")
+    auto_send = payload.get("auto_send", False)  # Default: put in input field
 
     if not audio_b64:
         await send_error(
@@ -609,7 +707,7 @@ async def handle_voice_audio(websocket: WebSocket, payload: dict) -> None:
         logger.info(f"Received audio: {len(audio_bytes)} bytes ({audio_format})")
 
         # Transcribe with local Whisper (FREE, runs in thread pool)
-        text = await handler.transcribe(audio_bytes)
+        text = await handler.transcribe(audio_bytes, input_format=audio_format)
 
         # Send transcription back to frontend
         await manager.send(
@@ -618,14 +716,15 @@ async def handle_voice_audio(websocket: WebSocket, payload: dict) -> None:
                 event_type=EventType.VOICE_TRANSCRIPTION,
                 payload={
                     "text": text,
+                    "auto_send": auto_send,
                 },
             ),
         )
 
         logger.info(f"Transcribed: {text[:100]}...")
 
-        # Process as regular user message if there's content
-        if text.strip():
+        # Only auto-process as user message if auto_send is True
+        if auto_send and text.strip():
             await handle_user_message(websocket, {"content": text})
 
     except Exception as e:
@@ -647,7 +746,7 @@ async def handle_voice_tts(websocket: WebSocket, payload: dict) -> None:
     """
     Handle TTS request from frontend.
 
-    Synthesizes text to audio using Edge TTS (FREE) and streams
+    Synthesizes text to audio using Kokoro TTS (FREE, local) and streams
     audio chunks back to the client.
 
     Args:
@@ -669,7 +768,7 @@ async def handle_voice_tts(websocket: WebSocket, payload: dict) -> None:
 
         logger.info(f"Synthesizing TTS: {len(text)} chars")
 
-        # Stream audio chunks back to frontend
+        # Stream audio chunks back to frontend (Kokoro outputs WAV)
         async for chunk in handler.synthesize_stream(text):
             await manager.send(
                 websocket,
@@ -677,7 +776,7 @@ async def handle_voice_tts(websocket: WebSocket, payload: dict) -> None:
                     event_type=EventType.VOICE_AUDIO_CHUNK,
                     payload={
                         "audio": handler.encode_audio(chunk),
-                        "format": "mp3",
+                        "format": "wav",
                     },
                 ),
             )

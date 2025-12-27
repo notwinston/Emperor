@@ -45,6 +45,10 @@ export function useAudioRecorder(
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number>(0);
 
+  // Use refs for callbacks to avoid stale closures
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+
   const cleanup = useCallback(() => {
     // Stop animation frame
     if (animationRef.current) {
@@ -70,6 +74,13 @@ export function useAudioRecorder(
 
   const startRecording = useCallback(async () => {
     try {
+      // Check if mediaDevices is available (requires secure context)
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error(
+          "Microphone access not available. This may be because the app is not running in a secure context (HTTPS or localhost)."
+        );
+      }
+
       // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -125,14 +136,14 @@ export function useAudioRecorder(
 
       recorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: mimeType });
-        options.onAudioData?.(blob);
-        options.onStop?.();
+        optionsRef.current.onAudioData?.(blob);
+        optionsRef.current.onStop?.();
         cleanup();
       };
 
-      recorder.onerror = (event) => {
+      recorder.onerror = () => {
         const error = new Error("MediaRecorder error");
-        options.onError?.(error);
+        optionsRef.current.onError?.(error);
         cleanup();
         setIsRecording(false);
       };
@@ -140,9 +151,11 @@ export function useAudioRecorder(
       // Start recording
       recorder.start();
       setIsRecording(true);
-      options.onStart?.();
+      optionsRef.current.onStart?.();
+      console.log("[useAudioRecorder] Recording started");
     } catch (err) {
       const error = err as Error;
+      console.error("[useAudioRecorder] Error starting recording:", error);
 
       // Check if permission denied
       if (
@@ -152,11 +165,11 @@ export function useAudioRecorder(
         setPermissionDenied(true);
       }
 
-      options.onError?.(error);
+      optionsRef.current.onError?.(error);
       cleanup();
       setIsRecording(false);
     }
-  }, [options, cleanup]);
+  }, [cleanup]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {

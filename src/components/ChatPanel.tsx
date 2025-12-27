@@ -6,8 +6,7 @@ import { Input } from "@/components/ui/input";
 import { ChatMessage } from "@/components/ChatMessage";
 import { MicrophoneButton } from "@/components/MicrophoneButton";
 import { useConversationStore } from "@/stores/conversationStore";
-import { useWebSocket } from "@/hooks/useWebSocket";
-import { useKeyboardShortcuts, usePushToTalk } from "@/hooks/useKeyboardShortcuts";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { cn } from "@/lib/utils";
 
 /**
@@ -167,16 +166,30 @@ function WelcomeScreen() {
   );
 }
 
-export function ChatPanel() {
+interface ChatPanelProps {
+  sendMessage: (text: string) => void;
+  sendAudio: (blob: Blob) => Promise<void>;
+  /** Register a function to set input text (for voice transcription) */
+  onRegisterSetInput?: (fn: (text: string) => void) => void;
+}
+
+export function ChatPanel({ sendMessage, sendAudio, onRegisterSetInput }: ChatPanelProps) {
   const [inputValue, setInputValue] = useState("");
-  const [isRecording, setIsRecording] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { messages, isTyping, status } = useConversationStore();
-  const { sendMessage } = useWebSocket();
 
   const isConnected = status === "connected";
+
+  // Register the setInputValue function with parent for voice transcription
+  useEffect(() => {
+    onRegisterSetInput?.((text: string) => {
+      setInputValue(text);
+      // Focus the input after setting text
+      inputRef.current?.focus();
+    });
+  }, [onRegisterSetInput]);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -198,16 +211,6 @@ export function ChatPanel() {
       setInputValue("");
     }
   };
-
-  const handleRecordingStart = useCallback(() => {
-    setIsRecording(true);
-    // Visual feedback only - actual audio capture TBD
-  }, []);
-
-  const handleRecordingStop = useCallback(() => {
-    setIsRecording(false);
-    // Visual feedback only - actual audio processing TBD
-  }, []);
 
   // Handle send with Cmd+Enter
   const handleSend = useCallback(() => {
@@ -238,9 +241,6 @@ export function ChatPanel() {
     ],
   });
 
-  // Push-to-talk with Space bar
-  usePushToTalk(handleRecordingStart, handleRecordingStop);
-
   return (
     <div className="relative flex h-full flex-col bg-[var(--black-primary)]">
       {/* Messages area */}
@@ -262,8 +262,7 @@ export function ChatPanel() {
       {/* Floating Microphone Button - Right Side */}
       <div className="absolute right-4 bottom-24 z-10">
         <MicrophoneButton
-          onRecordingStart={handleRecordingStart}
-          onRecordingStop={handleRecordingStop}
+          sendAudio={sendAudio}
           disabled={!isConnected}
         />
       </div>
@@ -277,20 +276,13 @@ export function ChatPanel() {
               ref={inputRef}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder={
-                isConnected
-                  ? isRecording
-                    ? "Listening..."
-                    : "Type a message..."
-                  : "Connecting..."
-              }
-              disabled={!isConnected || isRecording}
+              placeholder={isConnected ? "Type a message..." : "Connecting..."}
+              disabled={!isConnected}
               className={cn(
                 "w-full bg-[var(--black-tertiary)] border-[var(--gold-primary)]/20",
                 "text-[var(--gold-light)] placeholder:text-[var(--gold-dark)]/50",
                 "focus:border-[var(--gold-primary)]/50 focus:ring-[var(--gold-primary)]/30",
-                "transition-all duration-200 rounded-xl py-3 px-4",
-                isRecording && "animate-pulse"
+                "transition-all duration-200 rounded-xl py-3 px-4"
               )}
             />
           </div>
@@ -299,7 +291,7 @@ export function ChatPanel() {
           <Button
             type="submit"
             size="icon"
-            disabled={!isConnected || !inputValue.trim() || isRecording}
+            disabled={!isConnected || !inputValue.trim()}
             className={cn(
               "shrink-0 h-11 w-11 rounded-xl",
               "bg-gradient-to-br from-[var(--gold-primary)] to-[var(--gold-dark)]",
@@ -314,14 +306,6 @@ export function ChatPanel() {
             <Send className="h-5 w-5" />
           </Button>
         </form>
-
-        {/* Recording indicator text */}
-        {isRecording && (
-          <div className="flex items-center justify-center gap-2 mt-2 text-xs text-[var(--gold-primary)]">
-            <span className="h-2 w-2 rounded-full bg-[var(--gold-primary)] animate-pulse" />
-            Recording...
-          </div>
-        )}
       </div>
     </div>
   );

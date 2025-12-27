@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback } from "react";
+import { lazy, Suspense, useCallback, useState, useRef } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Sidebar } from "@/components/Sidebar";
 import { StatusBar } from "@/components/StatusBar";
@@ -8,6 +8,7 @@ import { Onboarding } from "@/components/Onboarding";
 import { ToastContainer } from "@/components/Toast";
 import { useOnboardingStore } from "@/stores/onboardingStore";
 import { useKeyboardShortcuts, APP_SHORTCUTS } from "@/hooks/useKeyboardShortcuts";
+import { useWebSocket } from "@/hooks/useWebSocket";
 import { toast } from "@/stores/toastStore";
 
 const queryClient = new QueryClient({
@@ -30,6 +31,16 @@ function LoadingFallback() {
 
 function AppContent() {
   const { isComplete } = useOnboardingStore();
+
+  // Ref to ChatPanel's setInputValue function
+  const setInputTextRef = useRef<(text: string) => void>(() => {});
+
+  // Single WebSocket connection for the entire app
+  const { sendMessage, sendAudio, reconnect } = useWebSocket({
+    onSetInputText: (text) => {
+      setInputTextRef.current(text);
+    },
+  });
 
   // Global keyboard shortcuts
   useKeyboardShortcuts({
@@ -65,11 +76,17 @@ function AppContent() {
       {/* Main content area */}
       <div className="flex flex-1 flex-col">
         {/* Status bar */}
-        <StatusBar />
+        <StatusBar reconnect={reconnect} />
 
         {/* Chat panel */}
         <Suspense fallback={<LoadingFallback />}>
-          <ChatPanel />
+          <ChatPanel
+            sendMessage={sendMessage}
+            sendAudio={sendAudio}
+            onRegisterSetInput={(fn) => {
+              setInputTextRef.current = fn;
+            }}
+          />
         </Suspense>
       </div>
 

@@ -18,6 +18,9 @@ interface ConversationState {
   // Current active conversation
   currentConversationId: string | null;
 
+  // TTS Settings
+  autoReadResponses: boolean;
+
   // Actions
   setStatus: (status: ConnectionStatus) => void;
   addMessage: (message: Message) => void;
@@ -32,6 +35,7 @@ interface ConversationState {
   setCurrentConversation: (id: string | null) => void;
   createConversation: () => string;
   deleteConversation: (id: string) => void;
+  setAutoReadResponses: (enabled: boolean) => void;
 }
 
 export const useConversationStore = create<ConversationState>((set) => ({
@@ -41,6 +45,7 @@ export const useConversationStore = create<ConversationState>((set) => ({
   isTyping: false,
   conversations: [],
   currentConversationId: null,
+  autoReadResponses: true, // TTS auto-read enabled by default
 
   // Actions
   setStatus: (status) => set({ status }),
@@ -138,4 +143,6 @@ export const useConversationStore = create<ConversationState>((set) => ({
           : state.currentConversationId,
       messages: state.currentConversationId === id ? [] : state.messages,
     })),
+
+  setAutoReadResponses: (enabled) => set({ autoReadResponses: enabled }),
 }));

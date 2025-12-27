@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useConversationStore } from "@/stores/conversationStore";
+import { SettingsPanel } from "./SettingsPanel";
 
 interface NavItem {
   icon: React.ReactNode;
@@ -62,11 +63,20 @@ function CrownIcon({ className }: { className?: string }) {
 export function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [activeItem, setActiveItem] = useState("chat");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const { createConversation } = useConversationStore();
 
   const handleNewChat = () => {
     createConversation();
     setActiveItem("chat");
+  };
+
+  const handleNavClick = (itemId: string) => {
+    if (itemId === "settings") {
+      setSettingsOpen(true);
+    } else {
+      setActiveItem(itemId);
+    }
   };
 
   return (
@@ -148,7 +158,7 @@ export function Sidebar() {
                 ? "active text-gold-primary"
                 : "text-muted-foreground hover:text-gold-text"
             )}
-            onClick={() => setActiveItem(item.id)}
+            onClick={() => handleNavClick(item.id)}
           >
             <span
               className={cn(
@@ -175,6 +185,9 @@ export function Sidebar() {
           </p>
         </div>
       )}
+
+      {/* Settings Panel */}
+      <SettingsPanel isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }

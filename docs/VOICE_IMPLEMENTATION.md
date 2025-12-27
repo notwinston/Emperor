@@ -717,7 +717,7 @@ asyncio.run(main())
 - [ ] Install ffmpeg
 - [ ] Add WebSocket handlers to `api/main.py`
 
-### Frontend
+### Frontendß
 - [ ] Create `useAudioRecorder.ts`
 - [ ] Create `useAudioPlayer.ts`
 - [ ] Update `useWebSocket.ts`

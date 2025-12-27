@@ -23,8 +23,8 @@ sentence-transformers>=2.2.0
 # Voice - STT (FREE, local)
 faster-whisper>=1.0.0
 
-# Voice - TTS (FREE, uses Microsoft Edge)
-edge-tts>=6.1.0
+# Voice - TTS (FREE, local Kokoro 82M)
+kokoro>=0.9.4
 
 # Audio processing
 pydub>=0.25.0

@@ -32,7 +32,7 @@ class WhisperSTT:
 
     def __init__(
         self,
-        model_size: ModelSize = "small",
+        model_size: ModelSize = "base",
         device: str = "auto",
         compute_type: str = "auto",
     ):
@@ -71,21 +71,52 @@ class WhisperSTT:
 
         logger.info("Whisper model loaded successfully")
 
-    def transcribe(self, audio_data: bytes, language: Optional[str] = None) -> str:
+    def transcribe(
+        self,
+        audio_data: bytes,
+        language: Optional[str] = None,
+        input_format: str = "webm",
+    ) -> str:
         """
         Transcribe audio bytes to text.
 
         Args:
             audio_data: Audio bytes (WAV, WebM, MP3, etc.)
             language: Optional language code (auto-detects if None)
+            input_format: Format of the input audio (webm, wav, mp3)
 
         Returns:
             Transcribed text
         """
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as f:
-            f.write(audio_data)
-            f.flush()
-            return self.transcribe_file(f.name, language)
+        from pydub import AudioSegment
+        import io
+
+        # Convert audio to WAV format for Whisper
+        try:
+            # Load audio from bytes
+            audio = AudioSegment.from_file(
+                io.BytesIO(audio_data),
+                format=input_format if input_format != "webm" else "webm",
+            )
+
+            # Convert to mono 16kHz WAV (optimal for Whisper)
+            audio = audio.set_channels(1).set_frame_rate(16000)
+
+            # Export to temp WAV file
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                audio.export(f.name, format="wav")
+                wav_path = f.name
+
+            try:
+                return self.transcribe_file(wav_path, language)
+            finally:
+                # Clean up temp file
+                import os
+                os.unlink(wav_path)
+
+        except Exception as e:
+            logger.error(f"Failed to convert audio: {e}")
+            raise
 
     def transcribe_file(self, file_path: str, language: Optional[str] = None) -> str:
         """
@@ -119,7 +150,7 @@ class WhisperSTT:
 _stt: Optional[WhisperSTT] = None
 
 
-def get_stt(model_size: ModelSize = "small") -> WhisperSTT:
+def get_stt(model_size: ModelSize = "base") -> WhisperSTT:
     """
     Get singleton STT instance.
 

@@ -1,8 +1,7 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Mic, Square, Loader2, MicOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAudioRecorder } from "@/hooks/useAudioRecorder";
-import { useWebSocket } from "@/hooks/useWebSocket";
 import { useConversationStore } from "@/stores/conversationStore";
 
 type MicrophoneState = "idle" | "recording" | "processing" | "permission_denied";
@@ -10,6 +9,8 @@ type MicrophoneState = "idle" | "recording" | "processing" | "permission_denied"
 interface MicrophoneButtonProps {
   disabled?: boolean;
   className?: string;
+  /** Function to send audio to backend - passed from parent that owns WebSocket */
+  sendAudio?: (blob: Blob) => Promise<void>;
 }
 
 /**
@@ -19,13 +20,17 @@ interface MicrophoneButtonProps {
 export function MicrophoneButton({
   disabled = false,
   className,
+  sendAudio,
 }: MicrophoneButtonProps) {
   const [state, setState] = useState<MicrophoneState>("idle");
   const { status } = useConversationStore();
-  const { sendAudio } = useWebSocket();
 
   const isConnected = status === "connected";
-  const isDisabled = disabled || !isConnected;
+  const isDisabled = disabled || !isConnected || !sendAudio;
+
+  // Use ref to avoid recreating callbacks
+  const sendAudioRef = useRef(sendAudio);
+  sendAudioRef.current = sendAudio;
 
   const {
     isRecording,
@@ -36,7 +41,7 @@ export function MicrophoneButton({
   } = useAudioRecorder({
     onAudioData: (blob) => {
       setState("processing");
-      sendAudio(blob);
+      sendAudioRef.current?.(blob);
       // Reset to idle after a short delay (backend will send transcription)
       setTimeout(() => {
         setState("idle");
@@ -61,22 +66,29 @@ export function MicrophoneButton({
     }
   }, [permissionDenied]);
 
-  // Sync state with recording state
+  // Sync state with recording state (only when isRecording changes)
   useEffect(() => {
-    if (isRecording && state !== "recording") {
+    if (isRecording) {
       setState("recording");
     }
-  }, [isRecording, state]);
+  }, [isRecording]);
 
   const handleClick = useCallback(async () => {
-    if (isDisabled) return;
+    console.log("[MicrophoneButton] Click - state:", state, "isDisabled:", isDisabled, "sendAudio:", !!sendAudio, "isConnected:", isConnected);
+
+    if (isDisabled) {
+      console.log("[MicrophoneButton] Button is disabled, returning");
+      return;
+    }
 
     if (state === "idle" || state === "permission_denied") {
+      console.log("[MicrophoneButton] Starting recording...");
       await startRecording();
     } else if (state === "recording") {
+      console.log("[MicrophoneButton] Stopping recording...");
       stopRecording();
     }
-  }, [state, isDisabled, startRecording, stopRecording]);
+  }, [state, isDisabled, startRecording, stopRecording, sendAudio, isConnected]);
 
   const getStateStyles = () => {
     switch (state) {

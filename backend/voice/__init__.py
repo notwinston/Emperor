@@ -2,12 +2,12 @@
 
 Components:
 - WhisperSTT: Local speech-to-text using faster-whisper (FREE)
-- EdgeTTS: Text-to-speech using Microsoft Edge (FREE)
+- KokoroTTS: Local text-to-speech using Kokoro 82M (FREE)
 - VoiceHandler: WebSocket integration for voice I/O
 """
 
 from .stt import WhisperSTT, get_stt
-from .tts import EdgeTTS, get_tts
+from .tts import KokoroTTS, get_tts, get_available_voices, KOKORO_VOICES, DEFAULT_VOICE
 from .handler import VoiceHandler, get_voice_handler
 
 __all__ = [
@@ -15,8 +15,11 @@ __all__ = [
     "WhisperSTT",
     "get_stt",
     # TTS
-    "EdgeTTS",
+    "KokoroTTS",
     "get_tts",
+    "get_available_voices",
+    "KOKORO_VOICES",
+    "DEFAULT_VOICE",
     # Handler
     "VoiceHandler",
     "get_voice_handler",

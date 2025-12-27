@@ -20,7 +20,8 @@
         "visible": false,
         "center": true,
         "decorations": true,
-        "resizable": true
+        "resizable": true,
+        "useHttpsScheme": true
       }
     ],
     "security": {
@@ -36,6 +37,14 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "macOS": {
+      "entitlements": null,
+      "exceptionDomain": null,
+      "frameworks": [],
+      "infoPlist": "Info.plist",
+      "minimumSystemVersion": "10.13",
+      "signingIdentity": null
+    }
   }
 }
