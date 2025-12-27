@@ -48,7 +48,7 @@ MEM0_CONFIG: Dict[str, Any] = {
 }
 
 # Local Configuration (Development)
-# No external API calls for embeddings, no Neo4j required
+# Uses local embeddings (HuggingFace) but requires Anthropic for memory extraction
 MEM0_LOCAL_CONFIG: Dict[str, Any] = {
     "version": "v1.1",
     "embedder": {
@@ -66,6 +66,13 @@ MEM0_LOCAL_CONFIG: Dict[str, Any] = {
                 "data",
                 "chroma",
             ),
+        },
+    },
+    "llm": {
+        "provider": "anthropic",
+        "config": {
+            "model": "claude-sonnet-4-20250514",
+            "api_key": os.getenv("ANTHROPIC_API_KEY"),
         },
     },
 }

@@ -1,418 +1,417 @@
 """Memory tools for SDK agents.
 
-Provides tools for storing, retrieving, and managing persistent memory.
-Used by all agents to remember user preferences, facts, and context.
+Provides tools for storing, retrieving, and managing persistent memory
+using the mem0-based memory system. Used by Domain Leads and Workers
+to remember user preferences, facts, code patterns, and context.
 
-Note: This provides a simple file-based implementation.
-Part 9 (Memory System) will add more sophisticated storage with
-vector search, semantic retrieval, and database backing.
+These tools integrate with the Part 9 memory system:
+- Stores memories with agent tagging for source tracking
+- Supports mode-based filtering (work/personal/general)
+- Uses semantic search for intelligent retrieval
 """
 
-import json
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, List
 
-from config import settings, get_logger
+from config import get_logger
 from .base import BaseTool, ToolParameter, ParameterType
 
 logger = get_logger(__name__)
 
 
-# Memory storage path
-MEMORY_DIR = settings.data_dir / "memory"
-MEMORY_FILE = MEMORY_DIR / "knowledge.json"
-
-
-def _ensure_memory_dir() -> None:
-    """Ensure memory directory exists."""
-    MEMORY_DIR.mkdir(parents=True, exist_ok=True)
-
-
-def _load_memories() -> dict[str, Any]:
-    """Load memories from file."""
-    _ensure_memory_dir()
-
-    if MEMORY_FILE.exists():
-        try:
-            with open(MEMORY_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except (json.JSONDecodeError, IOError) as e:
-            logger.error(f"Error loading memories: {e}")
-            return {"items": {}, "metadata": {"created": datetime.now(timezone.utc).isoformat()}}
-
-    return {"items": {}, "metadata": {"created": datetime.now(timezone.utc).isoformat()}}
-
-
-def _save_memories(data: dict[str, Any]) -> None:
-    """Save memories to file."""
-    _ensure_memory_dir()
-
-    data["metadata"]["updated"] = datetime.now(timezone.utc).isoformat()
-
-    with open(MEMORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-
-
 class RememberTool(BaseTool):
-    """Store information in long-term memory."""
+    """Store information in long-term memory using mem0."""
 
     name = "remember"
     description = (
-        "Store information in long-term memory for later retrieval. "
-        "Use this to save user preferences, important facts, or context. "
-        "Information persists across sessions."
+        "Store important information in long-term memory for future reference. "
+        "Use this to save user preferences, code patterns, learned facts, or project context. "
+        "Information persists across sessions and is searchable semantically."
     )
     parameters = [
         ToolParameter(
-            name="key",
+            name="content",
             type=ParameterType.STRING,
-            description="Unique identifier for this memory (e.g., 'user_name', 'project_tech_stack')",
-        ),
-        ToolParameter(
-            name="value",
-            type=ParameterType.STRING,
-            description="The information to remember",
+            description="The information to remember (be specific and descriptive)",
         ),
         ToolParameter(
             name="category",
             type=ParameterType.STRING,
-            description="Category for organization (e.g., 'user', 'project', 'preference')",
+            description="Category of memory",
             required=False,
             default="general",
+            enum=["preference", "fact", "code_pattern", "workflow", "project", "general"],
         ),
         ToolParameter(
-            name="tags",
-            type=ParameterType.ARRAY,
-            description="Tags for searching",
+            name="context",
+            type=ParameterType.STRING,
+            description="Context mode for filtering",
             required=False,
-            items={"type": "string"},
+            default="work",
+            enum=["work", "personal", "general"],
         ),
     ]
 
-    async def execute(
-        self,
-        key: str,
-        value: str,
-        category: str = "general",
-        tags: Optional[list[str]] = None,
-    ) -> str:
+    def __init__(self, agent_name: str = "unknown"):
         """
-        Store a memory.
+        Initialize with agent identity for tagging.
 
         Args:
-            key: Unique key for the memory
-            value: Information to store
+            agent_name: Name of the agent using this tool (e.g., "code_lead")
+        """
+        super().__init__()
+        self.agent_name = agent_name
+
+    async def execute(
+        self,
+        content: str,
+        category: str = "general",
+        context: str = "work",
+    ) -> str:
+        """
+        Store a memory using mem0.
+
+        Args:
+            content: Information to store
             category: Category for organization
-            tags: Optional tags for searching
+            context: Context mode (work/personal/general)
 
         Returns:
-            Confirmation message
+            Confirmation message with memory details
         """
-        logger.debug(f"Remembering: {key} = {value[:50]}...")
+        # Import here to avoid circular imports
+        from memory import add_memory
 
-        memories = _load_memories()
+        logger.debug(f"Agent '{self.agent_name}' remembering: {content[:50]}...")
 
-        # Check if updating existing memory
-        is_update = key in memories["items"]
+        try:
+            result = add_memory(
+                content=content,
+                context=context,
+                category=category,
+                agent=self.agent_name,
+                source="agent_tool",
+            )
 
-        # Store the memory
-        memories["items"][key] = {
-            "value": value,
-            "category": category,
-            "tags": tags or [],
-            "created": memories["items"].get(key, {}).get(
-                "created",
-                datetime.now(timezone.utc).isoformat()
-            ),
-            "updated": datetime.now(timezone.utc).isoformat(),
-        }
+            # Extract memory ID if available
+            memory_id = "unknown"
+            if isinstance(result, dict):
+                # mem0 returns different formats
+                if "results" in result and result["results"]:
+                    memory_id = result["results"][0].get("id", "stored")
+                elif "id" in result:
+                    memory_id = result["id"]
 
-        _save_memories(memories)
+            return (
+                f"Stored memory successfully.\n"
+                f"Content: {content}\n"
+                f"Category: {category}\n"
+                f"Context: {context}\n"
+                f"Agent: {self.agent_name}"
+            )
 
-        action = "Updated" if is_update else "Stored"
-        return f"{action} memory: {key}\nCategory: {category}\nValue: {value}"
+        except Exception as e:
+            logger.error(f"Failed to store memory: {e}")
+            return f"Failed to store memory: {str(e)}"
 
 
 class RecallTool(BaseTool):
-    """Retrieve information from memory."""
+    """Retrieve relevant memories using semantic search."""
 
     name = "recall"
     description = (
-        "Retrieve information from long-term memory. "
-        "Can recall by exact key or search by category/tags. "
-        "Use this to remember user preferences, project context, etc."
+        "Search and retrieve relevant memories using semantic similarity. "
+        "Use this to find user preferences, past decisions, code patterns, or context. "
+        "Describe what you're looking for in natural language."
     )
     parameters = [
         ToolParameter(
-            name="key",
+            name="query",
             type=ParameterType.STRING,
-            description="Exact key to retrieve, or search query",
-            required=False,
+            description="What to search for in memory (natural language)",
         ),
         ToolParameter(
-            name="category",
-            type=ParameterType.STRING,
-            description="Filter by category",
+            name="limit",
+            type=ParameterType.INTEGER,
+            description="Maximum number of results to return",
             required=False,
+            default=5,
         ),
         ToolParameter(
-            name="tag",
-            type=ParameterType.STRING,
-            description="Filter by tag",
-            required=False,
-        ),
-        ToolParameter(
-            name="list_all",
+            name="agent_only",
             type=ParameterType.BOOLEAN,
-            description="List all memories (use sparingly)",
+            description="Only return memories from this agent",
             required=False,
             default=False,
         ),
     ]
 
-    async def execute(
-        self,
-        key: Optional[str] = None,
-        category: Optional[str] = None,
-        tag: Optional[str] = None,
-        list_all: bool = False,
-    ) -> str:
+    def __init__(self, agent_name: str = "unknown"):
         """
-        Retrieve memories.
+        Initialize with agent identity.
 
         Args:
-            key: Exact key or search term
-            category: Category filter
-            tag: Tag filter
-            list_all: List all memories
+            agent_name: Name of the agent using this tool
+        """
+        super().__init__()
+        self.agent_name = agent_name
+
+    async def execute(
+        self,
+        query: str,
+        limit: int = 5,
+        agent_only: bool = False,
+    ) -> str:
+        """
+        Search memories using semantic search.
+
+        Args:
+            query: Search query (natural language)
+            limit: Maximum results to return
+            agent_only: Filter to only this agent's memories
 
         Returns:
-            Retrieved memories
+            Formatted list of relevant memories
         """
-        memories = _load_memories()
-        items = memories["items"]
+        from memory import search_memory, get_agent_memories
 
-        if not items:
-            return "No memories stored yet."
+        logger.debug(f"Agent '{self.agent_name}' recalling: {query}")
 
-        # Exact key lookup
-        if key and key in items:
-            memory = items[key]
-            return (
-                f"Memory: {key}\n"
-                f"Category: {memory['category']}\n"
-                f"Tags: {', '.join(memory['tags']) or 'none'}\n"
-                f"Value: {memory['value']}\n"
-                f"Last updated: {memory['updated']}"
-            )
-
-        # Search/filter
-        results = []
-
-        for k, v in items.items():
-            # Key search (partial match)
-            if key and key.lower() not in k.lower():
-                # Also check value
-                if key.lower() not in v["value"].lower():
-                    continue
-
-            # Category filter
-            if category and v["category"] != category:
-                continue
-
-            # Tag filter
-            if tag and tag not in v["tags"]:
-                continue
-
-            results.append((k, v))
-
-        if not results:
-            if key:
-                return f"No memories found matching: {key}"
-            elif category:
-                return f"No memories in category: {category}"
-            elif tag:
-                return f"No memories with tag: {tag}"
+        try:
+            if agent_only:
+                results = get_agent_memories(
+                    agent=self.agent_name,
+                    query=query,
+                    limit=limit,
+                )
             else:
-                return "No memories found with the given filters."
+                results = search_memory(
+                    query=query,
+                    limit=limit,
+                    agent=None,  # Search all agents
+                )
 
-        # Format results
-        lines = [f"Found {len(results)} memories:", ""]
+            if not results:
+                return f"No memories found for: {query}"
 
-        for k, v in results[:20]:  # Limit to 20 results
-            lines.append(f"📝 {k} [{v['category']}]")
-            lines.append(f"   {v['value'][:100]}{'...' if len(v['value']) > 100 else ''}")
-            lines.append("")
+            # Format results
+            lines = [f"Found {len(results)} relevant memories:", ""]
 
-        if len(results) > 20:
-            lines.append(f"... and {len(results) - 20} more")
+            for i, mem in enumerate(results, 1):
+                # Handle both MemoryResult objects and dicts
+                if hasattr(mem, "content"):
+                    content = mem.content
+                    score = getattr(mem, "relevance_score", 0.0)
+                    metadata = getattr(mem, "metadata", {})
+                else:
+                    content = mem.get("memory", mem.get("content", str(mem)))
+                    score = mem.get("score", 0.0)
+                    metadata = mem.get("metadata", {})
 
-        return "\n".join(lines)
+                agent = metadata.get("agent", "user")
+                category = metadata.get("category", "general")
+
+                lines.append(f"{i}. [{category}] (from: {agent})")
+                lines.append(f"   {content}")
+                if score > 0:
+                    lines.append(f"   Relevance: {score:.0%}")
+                lines.append("")
+
+            return "\n".join(lines)
+
+        except Exception as e:
+            logger.error(f"Failed to recall memories: {e}")
+            return f"Failed to recall memories: {str(e)}"
 
 
 class ForgetTool(BaseTool):
-    """Remove information from memory."""
+    """Remove a specific memory by ID."""
 
     name = "forget"
     description = (
-        "Remove information from long-term memory. "
-        "Use this to delete outdated or incorrect information. "
-        "Can forget by exact key or clear entire categories."
+        "Delete a specific memory by its ID. "
+        "Use this to remove outdated or incorrect information. "
+        "First use 'recall' to find the memory ID you want to delete."
     )
     parameters = [
         ToolParameter(
-            name="key",
+            name="memory_id",
             type=ParameterType.STRING,
-            description="Exact key to forget",
-            required=False,
-        ),
-        ToolParameter(
-            name="category",
-            type=ParameterType.STRING,
-            description="Clear all memories in a category (requires confirm=true)",
-            required=False,
-        ),
-        ToolParameter(
-            name="confirm",
-            type=ParameterType.BOOLEAN,
-            description="Confirm deletion (required for category-wide deletion)",
-            required=False,
-            default=False,
+            description="ID of the memory to delete",
         ),
     ]
 
-    async def execute(
-        self,
-        key: Optional[str] = None,
-        category: Optional[str] = None,
-        confirm: bool = False,
-    ) -> str:
+    def __init__(self, agent_name: str = "unknown"):
+        """Initialize with agent identity."""
+        super().__init__()
+        self.agent_name = agent_name
+
+    async def execute(self, memory_id: str) -> str:
         """
-        Remove memories.
+        Delete a memory by ID.
 
         Args:
-            key: Exact key to delete
-            category: Category to clear
-            confirm: Confirmation for bulk deletion
+            memory_id: ID of the memory to delete
 
         Returns:
-            Confirmation of what was deleted
+            Confirmation or error message
         """
-        if not key and not category:
-            return "Please specify a key or category to forget."
+        from memory import get_memory_service
 
-        memories = _load_memories()
-        items = memories["items"]
+        logger.debug(f"Agent '{self.agent_name}' forgetting: {memory_id}")
 
-        # Forget by exact key
-        if key:
-            if key in items:
-                del items[key]
-                _save_memories(memories)
-                logger.debug(f"Forgot memory: {key}")
-                return f"Forgot memory: {key}"
+        try:
+            service = get_memory_service()
+            success = service.delete(memory_id)
+
+            if success:
+                return f"Successfully deleted memory: {memory_id}"
             else:
-                return f"Memory not found: {key}"
+                return f"Failed to delete memory: {memory_id} (not found or already deleted)"
 
-        # Forget by category
-        if category:
-            if not confirm:
-                # Count affected memories
-                count = sum(1 for v in items.values() if v["category"] == category)
-                if count == 0:
-                    return f"No memories found in category: {category}"
-                return (
-                    f"This will delete {count} memories in category '{category}'.\n"
-                    f"Call again with confirm=true to proceed."
-                )
-
-            # Delete all in category
-            keys_to_delete = [
-                k for k, v in items.items()
-                if v["category"] == category
-            ]
-
-            for k in keys_to_delete:
-                del items[k]
-
-            _save_memories(memories)
-            logger.debug(f"Forgot {len(keys_to_delete)} memories in category: {category}")
-
-            return f"Forgot {len(keys_to_delete)} memories in category: {category}"
+        except Exception as e:
+            logger.error(f"Failed to delete memory: {e}")
+            return f"Failed to delete memory: {str(e)}"
 
 
 class ListMemoriesTool(BaseTool):
-    """List all memory categories and keys."""
+    """List all memories, optionally filtered by agent."""
 
     name = "list_memories"
     description = (
-        "List all stored memories organized by category. "
-        "Use this to see what information is remembered. "
-        "Shows keys and categories without full values."
+        "List all stored memories. "
+        "Use this to see what information has been remembered. "
+        "Can filter to show only memories from a specific agent."
     )
     parameters = [
         ToolParameter(
-            name="category",
+            name="agent_filter",
             type=ParameterType.STRING,
-            description="Filter by category (optional)",
+            description="Filter by agent name (optional)",
             required=False,
+        ),
+        ToolParameter(
+            name="limit",
+            type=ParameterType.INTEGER,
+            description="Maximum number of memories to show",
+            required=False,
+            default=20,
         ),
     ]
 
-    async def execute(self, category: Optional[str] = None) -> str:
+    def __init__(self, agent_name: str = "unknown"):
+        """Initialize with agent identity."""
+        super().__init__()
+        self.agent_name = agent_name
+
+    async def execute(
+        self,
+        agent_filter: Optional[str] = None,
+        limit: int = 20,
+    ) -> str:
         """
         List memories.
 
         Args:
-            category: Optional category filter
+            agent_filter: Optional agent name to filter by
+            limit: Maximum memories to show
 
         Returns:
-            List of memory keys by category
+            Formatted list of memories
         """
-        memories = _load_memories()
-        items = memories["items"]
+        from memory import get_memory_service
+        from memory.user_profile import DEFAULT_USER_ID
 
-        if not items:
-            return "No memories stored yet."
+        logger.debug(f"Agent '{self.agent_name}' listing memories")
 
-        # Organize by category
-        by_category: dict[str, list[str]] = {}
+        try:
+            service = get_memory_service()
+            all_memories = service.get_all(user_id=DEFAULT_USER_ID)
 
-        for k, v in items.items():
-            cat = v["category"]
-            if category and cat != category:
-                continue
-            if cat not in by_category:
-                by_category[cat] = []
-            by_category[cat].append(k)
+            if not all_memories:
+                return "No memories stored yet."
 
-        if not by_category:
-            return f"No memories in category: {category}"
+            # Handle mem0 response format
+            if isinstance(all_memories, dict):
+                memories = all_memories.get("results", [])
+            else:
+                memories = all_memories
 
-        # Format output
-        lines = ["Stored Memories:", ""]
+            # Filter by agent if specified
+            if agent_filter:
+                memories = [
+                    m for m in memories
+                    if m.get("metadata", {}).get("agent") == agent_filter
+                ]
 
-        for cat in sorted(by_category.keys()):
-            keys = sorted(by_category[cat])
-            lines.append(f"📁 {cat} ({len(keys)} items)")
-            for k in keys[:10]:  # Limit to 10 per category
-                lines.append(f"   • {k}")
-            if len(keys) > 10:
-                lines.append(f"   ... and {len(keys) - 10} more")
-            lines.append("")
+            if not memories:
+                if agent_filter:
+                    return f"No memories found from agent: {agent_filter}"
+                return "No memories stored yet."
 
-        total = sum(len(keys) for keys in by_category.values())
-        lines.append(f"Total: {total} memories in {len(by_category)} categories")
+            # Organize by agent
+            by_agent: dict[str, list] = {}
+            for mem in memories:
+                agent = mem.get("metadata", {}).get("agent", "user")
+                if agent not in by_agent:
+                    by_agent[agent] = []
+                by_agent[agent].append(mem)
 
-        return "\n".join(lines)
+            # Format output
+            lines = ["Stored Memories:", ""]
+
+            count = 0
+            for agent in sorted(by_agent.keys()):
+                agent_mems = by_agent[agent]
+                lines.append(f"📁 {agent} ({len(agent_mems)} memories)")
+
+                for mem in agent_mems[:5]:  # Show first 5 per agent
+                    if count >= limit:
+                        break
+                    content = mem.get("memory", mem.get("content", ""))[:80]
+                    category = mem.get("metadata", {}).get("category", "general")
+                    lines.append(f"   • [{category}] {content}...")
+                    count += 1
+
+                if len(agent_mems) > 5:
+                    lines.append(f"   ... and {len(agent_mems) - 5} more")
+                lines.append("")
+
+                if count >= limit:
+                    break
+
+            total = len(memories)
+            lines.append(f"Total: {total} memories from {len(by_agent)} agents")
+
+            return "\n".join(lines)
+
+        except Exception as e:
+            logger.error(f"Failed to list memories: {e}")
+            return f"Failed to list memories: {str(e)}"
 
 
-# Tool instances for easy access
-remember = RememberTool()
-recall = RecallTool()
-forget = ForgetTool()
-list_memories = ListMemoriesTool()
+def create_memory_tools(agent_name: str) -> List[BaseTool]:
+    """
+    Create memory tools configured for a specific agent.
 
-# All memory tools
+    Args:
+        agent_name: Name of the agent (e.g., "code_lead")
+
+    Returns:
+        List of configured memory tool instances
+    """
+    return [
+        RememberTool(agent_name),
+        RecallTool(agent_name),
+        ForgetTool(agent_name),
+        ListMemoriesTool(agent_name),
+    ]
+
+
+# Default tool instances (for backward compatibility)
+remember = RememberTool("unknown")
+recall = RecallTool("unknown")
+forget = ForgetTool("unknown")
+list_memories = ListMemoriesTool("unknown")
+
+# All memory tools (default instances)
 MEMORY_TOOLS = [remember, recall, forget, list_memories]

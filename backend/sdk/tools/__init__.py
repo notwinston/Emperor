@@ -29,10 +29,9 @@ from .file_tools import (
 from .search_tools import (
     GrepTool,
     GlobTool,
-    WebSearchTool,
     grep,
     glob_search,
-    web_search,
+    get_web_search_tool_definition,
     SEARCH_TOOLS,
 )
 
@@ -52,6 +51,7 @@ from .memory_tools import (
     RecallTool,
     ForgetTool,
     ListMemoriesTool,
+    create_memory_tools,
     remember,
     recall,
     forget,
@@ -94,10 +94,9 @@ __all__ = [
     # Search tools
     "GrepTool",
     "GlobTool",
-    "WebSearchTool",
     "grep",
     "glob_search",
-    "web_search",
+    "get_web_search_tool_definition",
     "SEARCH_TOOLS",
     # Shell tools
     "ExecuteCommandTool",
@@ -111,6 +110,7 @@ __all__ = [
     "RecallTool",
     "ForgetTool",
     "ListMemoriesTool",
+    "create_memory_tools",
     "remember",
     "recall",
     "forget",

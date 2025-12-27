@@ -88,6 +88,8 @@ class MemoryService:
         content: str,
         user_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        agent: Optional[str] = None,
+        source: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Add a memory.
 
@@ -101,24 +103,36 @@ class MemoryService:
             content: The text content to remember.
             user_id: User identifier for memory isolation.
             metadata: Optional metadata (category, tags, etc.).
+            agent: The agent that created this memory (e.g., "code_lead", "research_lead").
+            source: The activity that produced this memory (e.g., "code_analysis", "web_search").
 
         Returns:
             Dict containing the new memory ID and extracted memories.
 
         Example:
             >>> result = service.add(
-            ...     "I always use black for formatting Python code",
-            ...     user_id="user123",
-            ...     metadata={"category": "preference"}
+            ...     "User prefers pytest over unittest",
+            ...     user_id="emperor_user",
+            ...     metadata={"category": "preference"},
+            ...     agent="code_lead",
+            ...     source="code_review"
             ... )
             >>> print(result["id"])
             "mem_abc123"
         """
         uid = self._get_user_id(user_id)
+
+        # Build metadata with agent/source tags
+        meta = metadata.copy() if metadata else {}
+        if agent:
+            meta["agent"] = agent
+        if source:
+            meta["source"] = source
+
         return self.memory.add(
             content,
             user_id=uid,
-            metadata=metadata or {},
+            metadata=meta,
         )
 
     def search(
@@ -146,22 +160,50 @@ class MemoryService:
             ...     print(f"{r.content} (score: {r.relevance_score:.2f})")
         """
         uid = self._get_user_id(user_id)
-        results = self.memory.search(
+        response = self.memory.search(
             query,
             user_id=uid,
             limit=limit,
         )
 
+        # mem0 returns {'results': [...]} or list directly depending on version
+        if isinstance(response, dict):
+            results = response.get("results", [])
+        else:
+            results = response
+
         return [
             MemoryResult(
-                id=r.get("id", ""),
-                content=r.get("memory", ""),
-                metadata=r.get("metadata", {}),
-                relevance_score=r.get("score", 0.0),
-                created_at=self._parse_datetime(r.get("created_at")),
+                id=r.get("id", "") if isinstance(r, dict) else "",
+                content=r.get("memory", "") if isinstance(r, dict) else str(r),
+                metadata=r.get("metadata", {}) if isinstance(r, dict) else {},
+                relevance_score=r.get("score", 0.0) if isinstance(r, dict) else 0.0,
+                created_at=self._parse_datetime(r.get("created_at") if isinstance(r, dict) else None),
             )
             for r in results
         ]
+
+    def search_by_agent(
+        self,
+        query: str,
+        agent: str,
+        user_id: Optional[str] = None,
+        limit: int = 10,
+    ) -> List[MemoryResult]:
+        """Search memories created by a specific agent.
+
+        Args:
+            query: The search query (natural language).
+            agent: Filter to memories from this agent (e.g., "code_lead").
+            user_id: User identifier for memory isolation.
+            limit: Maximum number of results to return.
+
+        Returns:
+            List of MemoryResult objects from the specified agent.
+        """
+        results = self.search(query, user_id=user_id, limit=limit * 2)  # Get extra for filtering
+        filtered = [r for r in results if r.metadata.get("agent") == agent]
+        return filtered[:limit]
 
     def get_all(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get all memories for a user.

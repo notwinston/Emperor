@@ -3,12 +3,15 @@
 Handles automatic memory extraction from conversations.
 Processes chat sessions and extracts facts, preferences, and context
 using mem0's intelligent extraction capabilities.
+
+Supports mode-based filtering (work, personal, general).
 """
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from .memory_service import MemoryService, MemoryResult
+from .user_profile import Mode, MODE_CONTEXTS, get_current_mode
 
 
 class ConversationMemoryHandler:
@@ -46,6 +49,9 @@ class ConversationMemoryHandler:
         user_id: str,
         session_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        context: Optional[str] = None,
+        agent: Optional[str] = None,
+        source: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Process a conversation and extract memories.
 
@@ -58,6 +64,10 @@ class ConversationMemoryHandler:
             user_id: User identifier for memory isolation.
             session_id: Optional session identifier for grouping.
             metadata: Optional additional metadata to store.
+            context: Context mode ("work", "personal", "general").
+                     Uses current mode if not specified.
+            agent: The agent storing this memory (e.g., "code_lead", "research_lead").
+            source: The activity that produced this memory (e.g., "chat", "code_review").
 
         Returns:
             Dict containing extraction results from mem0.
@@ -69,7 +79,10 @@ class ConversationMemoryHandler:
             ...         {"role": "assistant", "content": "TypeScript is great!"}
             ...     ],
             ...     user_id="user123",
-            ...     session_id="session_abc"
+            ...     session_id="session_abc",
+            ...     context="work",
+            ...     agent="code_lead",
+            ...     source="code_review"
             ... )
         """
         if not messages:
@@ -78,9 +91,14 @@ class ConversationMemoryHandler:
         # Format conversation for mem0
         formatted = self._format_conversation(messages)
 
-        # Build metadata
+        # Determine context mode
+        if context is None:
+            context = get_current_mode().value
+
+        # Build metadata with context
         memory_metadata = {
             "type": "conversation",
+            "context": context,  # Store the mode context
             "session_id": session_id,
             "message_count": len(messages),
             "timestamp": datetime.now().isoformat(),
@@ -92,6 +110,8 @@ class ConversationMemoryHandler:
             content=formatted,
             user_id=user_id,
             metadata=memory_metadata,
+            agent=agent,
+            source=source,
         )
 
         return result
@@ -102,6 +122,8 @@ class ConversationMemoryHandler:
         content: str,
         user_id: str,
         session_id: Optional[str] = None,
+        agent: Optional[str] = None,
+        source: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Process a single message and extract memories.
 
@@ -113,6 +135,8 @@ class ConversationMemoryHandler:
             content: The message content.
             user_id: User identifier for memory isolation.
             session_id: Optional session identifier.
+            agent: The agent storing this memory (e.g., "code_lead").
+            source: The activity that produced this memory.
 
         Returns:
             Dict containing extraction results from mem0.
@@ -121,6 +145,8 @@ class ConversationMemoryHandler:
             messages=[{"role": role, "content": content}],
             user_id=user_id,
             session_id=session_id,
+            agent=agent,
+            source=source,
         )
 
     def get_relevant_context(
@@ -128,16 +154,23 @@ class ConversationMemoryHandler:
         query: str,
         user_id: str,
         limit: int = 5,
+        filter_by_mode: bool = True,
     ) -> str:
         """Get relevant memories formatted as context for prompts.
 
         Searches memories and formats them as a string suitable
         for injection into system prompts or context.
 
+        Filters results based on current mode:
+        - WORK mode: returns work + general memories
+        - PERSONAL mode: returns personal + general memories
+        - GENERAL mode: returns all memories
+
         Args:
             query: The search query (usually the user's current message).
             user_id: User identifier for memory isolation.
             limit: Maximum number of memories to include.
+            filter_by_mode: Whether to filter by current mode (default True).
 
         Returns:
             Formatted string of relevant memories, or empty string if none.
@@ -153,14 +186,24 @@ class ConversationMemoryHandler:
             - User prefers TypeScript
             - User uses Jest for testing"
         """
+        # Fetch extra results to account for filtering
+        fetch_limit = limit * 2 if filter_by_mode else limit
+
         memories = self.memory.search(
             query=query,
             user_id=user_id,
-            limit=limit,
+            limit=fetch_limit,
         )
 
         if not memories:
             return ""
+
+        # Filter by mode if enabled
+        if filter_by_mode:
+            memories = self._filter_by_mode(memories)
+
+        # Limit to requested count
+        memories = memories[:limit]
 
         return self._format_context(memories)
 
@@ -170,32 +213,96 @@ class ConversationMemoryHandler:
         user_id: str,
         limit: int = 5,
         min_score: float = 0.0,
+        filter_by_mode: bool = True,
+        agent: Optional[str] = None,
     ) -> List[MemoryResult]:
         """Get relevant memories as MemoryResult objects.
 
         Similar to get_relevant_context but returns structured
         objects instead of formatted string.
 
+        Filters results based on current mode:
+        - WORK mode: returns work + general memories
+        - PERSONAL mode: returns personal + general memories
+        - GENERAL mode: returns all memories
+
         Args:
             query: The search query.
             user_id: User identifier for memory isolation.
             limit: Maximum number of memories to return.
             min_score: Minimum relevance score threshold (0.0 to 1.0).
+            filter_by_mode: Whether to filter by current mode (default True).
+            agent: Filter to memories from specific agent (e.g., "code_lead").
 
         Returns:
-            List of MemoryResult objects filtered by score.
+            List of MemoryResult objects filtered by score, mode, and agent.
         """
+        # Fetch extra results to account for filtering
+        fetch_limit = limit * 3 if (filter_by_mode or agent) else limit
+
         memories = self.memory.search(
             query=query,
             user_id=user_id,
-            limit=limit,
+            limit=fetch_limit,
         )
+
+        # Filter by agent if specified
+        if agent:
+            memories = [m for m in memories if m.metadata.get("agent") == agent]
+
+        # Filter by mode if enabled
+        if filter_by_mode:
+            memories = self._filter_by_mode(memories)
 
         # Filter by minimum score
         if min_score > 0:
             memories = [m for m in memories if m.relevance_score >= min_score]
 
-        return memories
+        # Limit to requested count
+        return memories[:limit]
+
+    def get_agent_memories(
+        self,
+        agent: str,
+        user_id: str,
+        query: Optional[str] = None,
+        limit: int = 10,
+    ) -> List[MemoryResult]:
+        """Get memories created by a specific agent.
+
+        Useful for Domain Leads to retrieve their own stored knowledge.
+
+        Args:
+            agent: The agent identifier (e.g., "code_lead", "research_lead").
+            user_id: User identifier for memory isolation.
+            query: Optional search query to filter by relevance.
+            limit: Maximum number of memories to return.
+
+        Returns:
+            List of MemoryResult objects from the specified agent.
+
+        Example:
+            >>> memories = handler.get_agent_memories(
+            ...     agent="code_lead",
+            ...     user_id="emperor_user",
+            ...     query="python testing"
+            ... )
+        """
+        if query:
+            return self.memory.search_by_agent(
+                query=query,
+                agent=agent,
+                user_id=user_id,
+                limit=limit,
+            )
+        else:
+            # Get all memories and filter by agent
+            all_memories = self.memory.get_all(user_id=user_id)
+            agent_memories = [
+                m for m in all_memories
+                if m.get("metadata", {}).get("agent") == agent
+            ]
+            return agent_memories[:limit]
 
     def get_session_memories(
         self,
@@ -256,6 +363,34 @@ class ConversationMemoryHandler:
                 lines.append(f"- {mem.content} (relevance: {mem.relevance_score:.0%})")
 
         return "\n".join(lines)
+
+    def _filter_by_mode(self, memories: List[MemoryResult]) -> List[MemoryResult]:
+        """Filter memories based on current mode.
+
+        Mode filtering rules:
+        - WORK mode: returns memories with context in ["work", "general"]
+        - PERSONAL mode: returns memories with context in ["personal", "general"]
+        - GENERAL mode: returns all memories
+
+        Args:
+            memories: List of MemoryResult objects to filter.
+
+        Returns:
+            Filtered list of MemoryResult objects.
+        """
+        current_mode = get_current_mode()
+        allowed_contexts = MODE_CONTEXTS.get(current_mode, ["work", "personal", "general"])
+
+        filtered = []
+        for mem in memories:
+            # Get the context from metadata, default to "general"
+            mem_context = mem.metadata.get("context", "general")
+
+            # Include if context is in allowed list
+            if mem_context in allowed_contexts:
+                filtered.append(mem)
+
+        return filtered
 
     def clear_session(self, session_id: str, user_id: str) -> int:
         """Clear all memories from a specific session.

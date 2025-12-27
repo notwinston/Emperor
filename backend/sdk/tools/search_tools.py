@@ -318,76 +318,67 @@ class GlobTool(BaseTool):
         return f"{size:.1f} TB"
 
 
-class WebSearchTool(BaseTool):
-    """Search the web for information."""
+# =============================================================================
+# Web Search - Use Anthropic's Built-in Tool
+# =============================================================================
+#
+# For web search, use Anthropic's built-in web_search tool instead of a custom
+# implementation. Add it to your tools list like this:
+#
+#     tools = [
+#         {
+#             "type": "web_search_20250305",
+#             "name": "web_search",
+#             "max_uses": 5,  # Optional: limit searches per request
+#             "allowed_domains": ["docs.python.org"],  # Optional: restrict domains
+#         }
+#     ]
+#
+# Cost: $10 per 1,000 searches (plus token costs)
+# Features: Automatic citations, real-time results, server-side execution
+#
+# See: https://docs.anthropic.com/en/docs/agents-and-tools/tool-use/web-search-tool
+# =============================================================================
 
-    name = "web_search"
-    description = (
-        "Search the web for information. "
-        "Returns relevant search results with titles, URLs, and snippets. "
-        "Use this to find documentation, tutorials, or current information."
-    )
-    parameters = [
-        ToolParameter(
-            name="query",
-            type=ParameterType.STRING,
-            description="Search query",
-        ),
-        ToolParameter(
-            name="max_results",
-            type=ParameterType.INTEGER,
-            description="Maximum number of results",
-            required=False,
-            default=5,
-        ),
-    ]
 
-    async def execute(
-        self,
-        query: str,
-        max_results: int = 5,
-    ) -> str:
-        """
-        Search the web.
+def get_web_search_tool_definition(
+    max_uses: int = 5,
+    allowed_domains: list[str] | None = None,
+    blocked_domains: list[str] | None = None,
+) -> dict[str, Any]:
+    """
+    Get the Anthropic built-in web search tool definition.
 
-        Note: This is a placeholder implementation.
-        In production, integrate with a search API (Google, Bing, DuckDuckGo, etc.)
+    Add this to your agent's tools list for web search capability.
 
-        Args:
-            query: Search query
-            max_results: Maximum results
+    Args:
+        max_uses: Maximum searches per request (default 5)
+        allowed_domains: Only include results from these domains (optional)
+        blocked_domains: Never include results from these domains (optional)
 
-        Returns:
-            Search results or placeholder message
-        """
-        logger.debug(f"Web search: '{query}'")
+    Returns:
+        Tool definition dict for Anthropic API
 
-        # Placeholder - in production, integrate with a search API
-        # Options:
-        # - Google Custom Search API
-        # - Bing Search API
-        # - DuckDuckGo API
-        # - SerpAPI
-        # - Tavily API
+    Example:
+        >>> tools = other_tools + [get_web_search_tool_definition(max_uses=3)]
+    """
+    tool: dict[str, Any] = {
+        "type": "web_search_20250305",
+        "name": "web_search",
+        "max_uses": max_uses,
+    }
 
-        return (
-            f"Web search for: {query}\n\n"
-            f"[Web search not yet configured]\n\n"
-            f"To enable web search, integrate with a search API:\n"
-            f"- Google Custom Search API\n"
-            f"- Bing Search API\n"
-            f"- DuckDuckGo API\n"
-            f"- SerpAPI\n"
-            f"- Tavily API\n\n"
-            f"Configure the API key in backend/.env and implement\n"
-            f"the search logic in sdk/tools/search_tools.py"
-        )
+    if allowed_domains:
+        tool["allowed_domains"] = allowed_domains
+    if blocked_domains:
+        tool["blocked_domains"] = blocked_domains
+
+    return tool
 
 
 # Tool instances for easy access
 grep = GrepTool()
 glob_search = GlobTool()
-web_search = WebSearchTool()
 
-# All search tools
-SEARCH_TOOLS = [grep, glob_search, web_search]
+# All search tools (web search is built-in, not a custom tool)
+SEARCH_TOOLS = [grep, glob_search]

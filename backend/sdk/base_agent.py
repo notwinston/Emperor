@@ -12,12 +12,33 @@ and Workers extend. It implements the agent loop:
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Any, AsyncIterator, Optional
 
 from config import get_logger
 from .client import get_sdk_client, SDKClient
 
 logger = get_logger(__name__)
+
+
+def load_prompt(prompts_dir: Path, name: str) -> str:
+    """
+    Load a system prompt from a prompts directory.
+
+    Args:
+        prompts_dir: Path to the prompts directory
+        name: Name of the prompt file (without .md extension)
+
+    Returns:
+        The prompt content as a string
+
+    Raises:
+        FileNotFoundError: If the prompt file doesn't exist
+    """
+    prompt_file = prompts_dir / f"{name}.md"
+    if not prompt_file.exists():
+        raise FileNotFoundError(f"Prompt file not found: {prompt_file}")
+    return prompt_file.read_text(encoding="utf-8")
 
 
 class AgentStatus(str, Enum):
