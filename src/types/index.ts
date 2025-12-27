@@ -91,6 +91,13 @@ export type WSEventType =
   | "approval.request"
   | "approval.response"
   | "approval.timeout"
+  // Voice events
+  | "voice.audio"
+  | "voice.transcription"
+  | "voice.tts"
+  | "voice.audio_chunk"
+  | "voice.audio_complete"
+  | "voice.error"
   // System events
   | "system.error";
 
@@ -304,4 +311,45 @@ export interface ActiveToolExecution {
   agent: string;
   started_at: Date;
   requires_approval: boolean;
+}
+
+/**
+ * Voice audio payload (frontend -> backend)
+ */
+export interface VoiceAudioPayload {
+  audio: string; // Base64 encoded audio
+  format: string; // Audio format (webm, wav, mp3)
+}
+
+/**
+ * Voice transcription payload (backend -> frontend)
+ */
+export interface VoiceTranscriptionPayload {
+  text: string;
+  language?: string;
+  duration_seconds?: number;
+}
+
+/**
+ * Voice TTS request payload (frontend -> backend)
+ */
+export interface VoiceTTSPayload {
+  text: string;
+}
+
+/**
+ * Voice audio chunk payload (backend -> frontend)
+ */
+export interface VoiceAudioChunkPayload {
+  audio: string; // Base64 encoded audio chunk
+  format: string; // Audio format (mp3)
+}
+
+/**
+ * Voice error payload
+ */
+export interface VoiceErrorPayload {
+  error: string;
+  stage: "transcription" | "synthesis";
+  recoverable: boolean;
 }

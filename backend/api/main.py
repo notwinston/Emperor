@@ -28,6 +28,7 @@ from process_manager import (
     EventType as PMEventType,
     Priority,
 )
+from voice import get_voice_handler
 
 logger = get_logger(__name__)
 
@@ -577,6 +578,136 @@ async def handle_approval_response(websocket: WebSocket, payload: dict) -> None:
     logger.info(f"Approval response published: {request_id} - {'approved' if approved else 'denied'}")
 
 
+async def handle_voice_audio(websocket: WebSocket, payload: dict) -> None:
+    """
+    Handle incoming voice audio from frontend.
+
+    Transcribes audio using local Whisper (FREE) and optionally
+    processes the transcribed text as a user message.
+
+    Args:
+        websocket: The client's WebSocket connection
+        payload: Contains base64 audio and format
+    """
+    audio_b64 = payload.get("audio", "")
+    audio_format = payload.get("format", "webm")
+
+    if not audio_b64:
+        await send_error(
+            websocket,
+            ErrorCode.MISSING_FIELD,
+            "Missing required field: audio",
+        )
+        return
+
+    try:
+        # Get voice handler (lazy-loads Whisper model on first use)
+        handler = get_voice_handler()
+
+        # Decode base64 audio
+        audio_bytes = handler.decode_audio(audio_b64)
+        logger.info(f"Received audio: {len(audio_bytes)} bytes ({audio_format})")
+
+        # Transcribe with local Whisper (FREE, runs in thread pool)
+        text = await handler.transcribe(audio_bytes)
+
+        # Send transcription back to frontend
+        await manager.send(
+            websocket,
+            BaseEvent(
+                event_type=EventType.VOICE_TRANSCRIPTION,
+                payload={
+                    "text": text,
+                },
+            ),
+        )
+
+        logger.info(f"Transcribed: {text[:100]}...")
+
+        # Process as regular user message if there's content
+        if text.strip():
+            await handle_user_message(websocket, {"content": text})
+
+    except Exception as e:
+        logger.error(f"Voice transcription error: {e}", exc_info=True)
+        await manager.send(
+            websocket,
+            BaseEvent(
+                event_type=EventType.VOICE_ERROR,
+                payload={
+                    "error": str(e),
+                    "stage": "transcription",
+                    "recoverable": True,
+                },
+            ),
+        )
+
+
+async def handle_voice_tts(websocket: WebSocket, payload: dict) -> None:
+    """
+    Handle TTS request from frontend.
+
+    Synthesizes text to audio using Edge TTS (FREE) and streams
+    audio chunks back to the client.
+
+    Args:
+        websocket: The client's WebSocket connection
+        payload: Contains text to synthesize
+    """
+    text = payload.get("text", "")
+
+    if not text.strip():
+        await send_error(
+            websocket,
+            ErrorCode.INVALID_FIELD,
+            "Text cannot be empty",
+        )
+        return
+
+    try:
+        handler = get_voice_handler()
+
+        logger.info(f"Synthesizing TTS: {len(text)} chars")
+
+        # Stream audio chunks back to frontend
+        async for chunk in handler.synthesize_stream(text):
+            await manager.send(
+                websocket,
+                BaseEvent(
+                    event_type=EventType.VOICE_AUDIO_CHUNK,
+                    payload={
+                        "audio": handler.encode_audio(chunk),
+                        "format": "mp3",
+                    },
+                ),
+            )
+
+        # Signal completion
+        await manager.send(
+            websocket,
+            BaseEvent(
+                event_type=EventType.VOICE_AUDIO_COMPLETE,
+                payload={},
+            ),
+        )
+
+        logger.info("TTS streaming complete")
+
+    except Exception as e:
+        logger.error(f"TTS error: {e}", exc_info=True)
+        await manager.send(
+            websocket,
+            BaseEvent(
+                event_type=EventType.VOICE_ERROR,
+                payload={
+                    "error": str(e),
+                    "stage": "synthesis",
+                    "recoverable": True,
+                },
+            ),
+        )
+
+
 async def route_message(websocket: WebSocket, data: dict) -> None:
     """
     Route incoming messages to appropriate handlers.
@@ -595,6 +726,10 @@ async def route_message(websocket: WebSocket, data: dict) -> None:
             await handle_heartbeat(websocket, payload)
         case "approval.response":
             await handle_approval_response(websocket, payload)
+        case "voice.audio":
+            await handle_voice_audio(websocket, payload)
+        case "voice.tts":
+            await handle_voice_tts(websocket, payload)
         case _:
             logger.warning(f"Unknown event type: {event_type}")
             await send_error(

@@ -48,6 +48,14 @@ class EventType(str, Enum):
     # System events
     SYSTEM_ERROR = "system.error"
 
+    # Voice events
+    VOICE_AUDIO = "voice.audio"
+    VOICE_TRANSCRIPTION = "voice.transcription"
+    VOICE_TTS = "voice.tts"
+    VOICE_AUDIO_CHUNK = "voice.audio_chunk"
+    VOICE_AUDIO_COMPLETE = "voice.audio_complete"
+    VOICE_ERROR = "voice.error"
+
 
 class BaseEvent(BaseModel):
     """Base event structure for all WebSocket messages."""
@@ -186,3 +194,33 @@ class ApprovalResponsePayload(BaseModel):
     request_id: str
     approved: bool
     reason: str | None = None
+
+
+class VoiceAudioPayload(BaseModel):
+    """Payload for voice audio events (frontend -> backend)."""
+
+    audio: str  # Base64 encoded audio
+    format: str = "webm"  # Audio format (webm, wav, mp3)
+
+
+class VoiceTranscriptionPayload(BaseModel):
+    """Payload for voice transcription events (backend -> frontend)."""
+
+    text: str
+    language: str | None = None
+    duration_seconds: float | None = None
+
+
+class VoiceAudioChunkPayload(BaseModel):
+    """Payload for TTS audio chunk events (backend -> frontend)."""
+
+    audio: str  # Base64 encoded audio chunk
+    format: str = "mp3"
+
+
+class VoiceErrorPayload(BaseModel):
+    """Payload for voice error events."""
+
+    error: str
+    stage: str  # "transcription" or "synthesis"
+    recoverable: bool = True

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useConversationStore } from "@/stores/conversationStore";
 import { generateId } from "@/lib/utils";
+import { useAudioPlayer } from "./useAudioPlayer";
 import type {
   WSEvent,
   AssistantMessagePayload,
@@ -15,19 +16,38 @@ import type {
   LeadCompletePayload,
   WorkerProgressPayload,
   WorkerCompletePayload,
+  VoiceTranscriptionPayload,
+  VoiceAudioChunkPayload,
+  VoiceErrorPayload,
 } from "@/types";
+
+interface VoiceCallbacks {
+  /** Called when transcription is received */
+  onTranscription?: (text: string) => void;
+  /** Called when TTS audio completes */
+  onTTSComplete?: () => void;
+  /** Called on voice error */
+  onVoiceError?: (error: string, stage: "transcription" | "synthesis") => void;
+}
 
 const WS_URL = "ws://127.0.0.1:8765/ws";
 const RECONNECT_DELAY = 3000;
 const MAX_RECONNECT_ATTEMPTS = 5;
 
-export function useWebSocket() {
+export function useWebSocket(voiceCallbacks?: VoiceCallbacks) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const voiceCallbacksRef = useRef(voiceCallbacks);
+
+  // Keep callbacks ref updated
+  voiceCallbacksRef.current = voiceCallbacks;
 
   const { setStatus, addMessage, upsertStreamingMessage, setTyping } =
     useConversationStore();
+
+  // Audio player for TTS playback
+  const audioPlayer = useAudioPlayer();
 
   const handleMessage = useCallback(
     (event: MessageEvent) => {
@@ -244,6 +264,45 @@ export function useWebSocket() {
             break;
           }
 
+          // ===== Voice Events =====
+          case "voice.transcription": {
+            const payload = data.payload as unknown as VoiceTranscriptionPayload;
+            console.log(`[Voice] Transcribed: ${payload.text}`);
+            voiceCallbacksRef.current?.onTranscription?.(payload.text);
+            break;
+          }
+
+          case "voice.audio_chunk": {
+            const payload = data.payload as unknown as VoiceAudioChunkPayload;
+            console.log(`[Voice] Audio chunk received (${payload.format})`);
+            audioPlayer.playChunk(payload.audio);
+            break;
+          }
+
+          case "voice.audio_complete": {
+            console.log("[Voice] TTS complete");
+            voiceCallbacksRef.current?.onTTSComplete?.();
+            break;
+          }
+
+          case "voice.error": {
+            const payload = data.payload as unknown as VoiceErrorPayload;
+            console.error(`[Voice Error] ${payload.stage}:`, payload.error);
+            voiceCallbacksRef.current?.onVoiceError?.(payload.error, payload.stage);
+
+            // Show error message to user
+            addMessage({
+              id: generateId(),
+              role: "system",
+              content: `🎤 Voice error (${payload.stage}): ${payload.error}`,
+              timestamp: new Date(),
+              metadata: {
+                recoverable: payload.recoverable,
+              },
+            });
+            break;
+          }
+
           default:
             console.log("Unknown event type:", data.event_type, data.payload);
         }
@@ -251,7 +310,7 @@ export function useWebSocket() {
         console.error("Failed to parse WebSocket message:", error);
       }
     },
-    [addMessage, upsertStreamingMessage, setTyping]
+    [addMessage, upsertStreamingMessage, setTyping, audioPlayer]
   );
 
   const connect = useCallback(() => {
@@ -392,6 +451,81 @@ export function useWebSocket() {
     [addMessage]
   );
 
+  /**
+   * Send audio data to backend for transcription.
+   * The transcribed text will be processed as a user message.
+   */
+  const sendAudio = useCallback(async (audioBlob: Blob) => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) {
+      console.error("WebSocket is not connected");
+      return;
+    }
+
+    try {
+      // Convert blob to base64
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const base64Audio = btoa(binary);
+
+      // Determine format from blob type
+      const format = audioBlob.type.includes("webm")
+        ? "webm"
+        : audioBlob.type.includes("wav")
+          ? "wav"
+          : "webm";
+
+      const event: WSEvent = {
+        event_id: generateId(),
+        event_type: "voice.audio",
+        source: "frontend",
+        timestamp: new Date().toISOString(),
+        payload: {
+          audio: base64Audio,
+          format,
+        },
+      };
+
+      wsRef.current.send(JSON.stringify(event));
+      console.log(`[Voice] Sent ${bytes.length} bytes of audio (${format})`);
+    } catch (error) {
+      console.error("Failed to send audio:", error);
+    }
+  }, []);
+
+  /**
+   * Request TTS for text. Audio chunks will be played automatically.
+   */
+  const requestTTS = useCallback((text: string) => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) {
+      console.error("WebSocket is not connected");
+      return;
+    }
+
+    const event: WSEvent = {
+      event_id: generateId(),
+      event_type: "voice.tts",
+      source: "frontend",
+      timestamp: new Date().toISOString(),
+      payload: {
+        text,
+      },
+    };
+
+    wsRef.current.send(JSON.stringify(event));
+    console.log(`[Voice] Requested TTS for: ${text.slice(0, 50)}...`);
+  }, []);
+
+  /**
+   * Stop TTS playback
+   */
+  const stopTTS = useCallback(() => {
+    audioPlayer.stop();
+  }, [audioPlayer]);
+
   // Auto-connect on mount
   useEffect(() => {
     connect();
@@ -406,5 +540,11 @@ export function useWebSocket() {
     reconnect,
     sendMessage,
     sendApprovalResponse,
+    // Voice functions
+    sendAudio,
+    requestTTS,
+    stopTTS,
+    // Audio player state
+    isPlayingTTS: audioPlayer.isPlaying,
   };
 }

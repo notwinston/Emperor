@@ -32,7 +32,7 @@ class WhisperSTT:
 
     def __init__(
         self,
-        model_size: ModelSize = "medium",
+        model_size: ModelSize = "small",
         device: str = "auto",
         compute_type: str = "auto",
     ):
@@ -119,7 +119,7 @@ class WhisperSTT:
 _stt: Optional[WhisperSTT] = None
 
 
-def get_stt(model_size: ModelSize = "medium") -> WhisperSTT:
+def get_stt(model_size: ModelSize = "small") -> WhisperSTT:
     """
     Get singleton STT instance.
 

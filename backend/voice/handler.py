@@ -25,7 +25,7 @@ class VoiceHandler:
 
     def __init__(
         self,
-        whisper_model: ModelSize = "medium",
+        whisper_model: ModelSize = "small",
         tts_voice: str = DEFAULT_VOICE,
     ):
         """
@@ -134,7 +134,7 @@ _handler: Optional[VoiceHandler] = None
 
 
 def get_voice_handler(
-    whisper_model: ModelSize = "medium",
+    whisper_model: ModelSize = "small",
     tts_voice: str = DEFAULT_VOICE,
 ) -> VoiceHandler:
     """
