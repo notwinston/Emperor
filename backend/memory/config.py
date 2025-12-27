@@ -8,74 +8,102 @@ Provides two configuration options:
 import os
 from typing import Dict, Any
 
-# Full Configuration (Cloud/Production)
-# Requires: OpenAI API key, Neo4j instance, Anthropic API key
-MEM0_CONFIG: Dict[str, Any] = {
-    "version": "v1.1",  # Enables knowledge graph feature
-    "embedder": {
-        "provider": "openai",
-        "config": {
-            "model": "text-embedding-3-small",
-            "api_key": os.getenv("OPENAI_API_KEY"),
-        },
-    },
-    "vector_store": {
-        "provider": "chroma",
-        "config": {
-            "collection_name": "emperor_memories",
-            "path": os.path.join(
-                os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-                "data",
-                "chroma",
-            ),
-        },
-    },
-    "graph_store": {
-        "provider": "neo4j",
-        "config": {
-            "url": os.getenv("NEO4J_URL", "bolt://localhost:7687"),
-            "username": os.getenv("NEO4J_USERNAME", "neo4j"),
-            "password": os.getenv("NEO4J_PASSWORD", "password"),
-        },
-    },
-    "llm": {
-        "provider": "anthropic",
-        "config": {
-            "model": "claude-sonnet-4-20250514",
-            "api_key": os.getenv("ANTHROPIC_API_KEY"),
-        },
-    },
-}
 
-# Local Configuration (Development)
-# Uses local embeddings (HuggingFace) but requires Anthropic for memory extraction
-MEM0_LOCAL_CONFIG: Dict[str, Any] = {
-    "version": "v1.1",
-    "embedder": {
-        "provider": "huggingface",
-        "config": {
-            "model": "sentence-transformers/all-MiniLM-L6-v2",
+def _get_anthropic_api_key() -> str:
+    """Get Anthropic API key from settings or environment."""
+    # Try settings first (handles .env with case insensitivity)
+    try:
+        from config import settings
+        if settings.anthropic_api_key:
+            return settings.anthropic_api_key
+    except Exception:
+        pass
+
+    # Fall back to environment variable (case-sensitive)
+    return os.getenv("ANTHROPIC_API_KEY", "")
+
+
+def _get_data_path() -> str:
+    """Get the path to the data directory."""
+    return os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        "data",
+        "chroma",
+    )
+
+
+def _build_full_config() -> Dict[str, Any]:
+    """Build full configuration (Cloud/Production).
+
+    Requires: OpenAI API key, Neo4j instance, Anthropic API key
+    """
+    return {
+        "version": "v1.1",  # Enables knowledge graph feature
+        "embedder": {
+            "provider": "openai",
+            "config": {
+                "model": "text-embedding-3-small",
+                "api_key": os.getenv("OPENAI_API_KEY"),
+            },
         },
-    },
-    "vector_store": {
-        "provider": "chroma",
-        "config": {
-            "collection_name": "emperor_memories",
-            "path": os.path.join(
-                os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-                "data",
-                "chroma",
-            ),
+        "vector_store": {
+            "provider": "chroma",
+            "config": {
+                "collection_name": "emperor_memories",
+                "path": _get_data_path(),
+            },
         },
-    },
-    "llm": {
-        "provider": "anthropic",
-        "config": {
-            "model": "claude-sonnet-4-20250514",
-            "api_key": os.getenv("ANTHROPIC_API_KEY"),
+        "graph_store": {
+            "provider": "neo4j",
+            "config": {
+                "url": os.getenv("NEO4J_URL", "bolt://localhost:7687"),
+                "username": os.getenv("NEO4J_USERNAME", "neo4j"),
+                "password": os.getenv("NEO4J_PASSWORD", "password"),
+            },
         },
-    },
-}
+        "llm": {
+            "provider": "anthropic",
+            "config": {
+                "model": "claude-sonnet-4-20250514",
+                "api_key": _get_anthropic_api_key(),
+            },
+        },
+    }
+
+
+def _build_local_config() -> Dict[str, Any]:
+    """Build local configuration (Development).
+
+    Uses local embeddings (HuggingFace) but requires Anthropic for memory extraction.
+    """
+    return {
+        "version": "v1.1",
+        "embedder": {
+            "provider": "huggingface",
+            "config": {
+                "model": "sentence-transformers/all-MiniLM-L6-v2",
+            },
+        },
+        "vector_store": {
+            "provider": "chroma",
+            "config": {
+                "collection_name": "emperor_memories",
+                "path": _get_data_path(),
+            },
+        },
+        "llm": {
+            "provider": "anthropic",
+            "config": {
+                "model": "claude-sonnet-4-20250514",
+                "api_key": _get_anthropic_api_key(),
+            },
+        },
+    }
+
+
+# Lazy-loaded config references (for backwards compatibility)
+MEM0_CONFIG: Dict[str, Any] = {}
+MEM0_LOCAL_CONFIG: Dict[str, Any] = {}
 
 
 def get_config(use_local: bool = True) -> Dict[str, Any]:
@@ -88,7 +116,8 @@ def get_config(use_local: bool = True) -> Dict[str, Any]:
     Returns:
         Configuration dictionary for mem0.Memory.from_config()
     """
-    return MEM0_LOCAL_CONFIG if use_local else MEM0_CONFIG
+    # Build config lazily to ensure settings are loaded
+    return _build_local_config() if use_local else _build_full_config()
 
 
 def validate_config(config: Dict[str, Any]) -> bool:

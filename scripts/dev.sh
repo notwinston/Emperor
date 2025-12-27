@@ -88,6 +88,22 @@ start_backend() {
     fi
 }
 
+# Check and install frontend dependencies
+check_dependencies() {
+    echo -e "${YELLOW}Checking frontend dependencies...${NC}"
+
+    cd "$PROJECT_ROOT"
+
+    # Check if node_modules exists or if package.json is newer
+    if [ ! -d "node_modules" ] || [ "package.json" -nt "node_modules/.package-lock.json" ]; then
+        echo -e "Installing dependencies..."
+        pnpm install
+        echo -e "${GREEN}Dependencies installed${NC}"
+    else
+        echo -e "${GREEN}Dependencies up to date${NC}"
+    fi
+}
+
 # Start Tauri frontend
 start_frontend() {
     echo -e "${YELLOW}Starting Tauri frontend...${NC}"
@@ -98,6 +114,7 @@ start_frontend() {
 
 # Main
 start_backend
+check_dependencies
 start_frontend
 
 # If frontend exits, cleanup

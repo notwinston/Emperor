@@ -7,6 +7,7 @@ import { ChatMessage } from "@/components/ChatMessage";
 import { MicrophoneButton } from "@/components/MicrophoneButton";
 import { useConversationStore } from "@/stores/conversationStore";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { useKeyboardShortcuts, usePushToTalk } from "@/hooks/useKeyboardShortcuts";
 import { cn } from "@/lib/utils";
 
 /**
@@ -207,6 +208,38 @@ export function ChatPanel() {
     setIsRecording(false);
     // Visual feedback only - actual audio processing TBD
   }, []);
+
+  // Handle send with Cmd+Enter
+  const handleSend = useCallback(() => {
+    const text = inputValue.trim();
+    if (text && isConnected) {
+      sendMessage(text);
+      setInputValue("");
+    }
+  }, [inputValue, isConnected, sendMessage]);
+
+  // Keyboard shortcuts for chat
+  useKeyboardShortcuts({
+    shortcuts: [
+      {
+        key: "Enter",
+        meta: true,
+        action: handleSend,
+        description: "Send message",
+      },
+      {
+        key: "Escape",
+        action: () => {
+          setInputValue("");
+          inputRef.current?.blur();
+        },
+        description: "Clear input",
+      },
+    ],
+  });
+
+  // Push-to-talk with Space bar
+  usePushToTalk(handleRecordingStart, handleRecordingStop);
 
   return (
     <div className="relative flex h-full flex-col bg-[var(--black-primary)]">

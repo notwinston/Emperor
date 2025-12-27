@@ -95,6 +95,7 @@ class BaseAgent(ABC):
         client: Optional[SDKClient] = None,
         model: Optional[str] = None,
         max_turns: int = 10,
+        use_permissions: bool = True,
     ):
         """
         Initialize the agent.
@@ -104,6 +105,7 @@ class BaseAgent(ABC):
             client: SDK client instance. Uses singleton if not provided.
             model: Model override. Uses client default if not provided.
             max_turns: Maximum conversation turns before stopping
+            use_permissions: Whether to use the permission system for tool execution
         """
         self.name = name
         self.client = client or get_sdk_client()
@@ -112,8 +114,9 @@ class BaseAgent(ABC):
         self.status = AgentStatus.IDLE
         self._conversation_history: list[dict[str, Any]] = []
         self._tool_registry: dict[str, callable] = {}
+        self._use_permissions = use_permissions
 
-        logger.debug(f"Agent '{name}' initialized")
+        logger.debug(f"Agent '{name}' initialized (permissions: {use_permissions})")
 
     @abstractmethod
     def get_system_prompt(self) -> str:
@@ -328,10 +331,10 @@ class BaseAgent(ABC):
 
     async def execute_tool(self, tool_call: ToolCall) -> ToolResult:
         """
-        Execute a tool call.
+        Execute a tool call with permission checking.
 
         Override this method to customize tool execution.
-        Default implementation looks up handler in registry.
+        Default implementation checks permissions then looks up handler in registry.
 
         Args:
             tool_call: The tool call to execute
@@ -339,6 +342,28 @@ class BaseAgent(ABC):
         Returns:
             ToolResult with the output
         """
+        # Check permissions if enabled
+        if self._use_permissions:
+            permission_result = await self._check_tool_permission(tool_call)
+            if not permission_result.allowed and not permission_result.requires_approval:
+                return ToolResult(
+                    tool_use_id=tool_call.id,
+                    content=f"Permission denied: {permission_result.reason}",
+                    is_error=True,
+                )
+
+            # If requires approval, request it
+            if permission_result.requires_approval:
+                approved = await self._request_tool_approval(
+                    tool_call, permission_result
+                )
+                if not approved:
+                    return ToolResult(
+                        tool_use_id=tool_call.id,
+                        content=f"Operation requires approval: {permission_result.reason}",
+                        is_error=True,
+                    )
+
         handler = self._tool_registry.get(tool_call.name)
 
         if not handler:
@@ -356,6 +381,13 @@ class BaseAgent(ABC):
                 content=str(result),
                 is_error=False,
             )
+        except PermissionError as e:
+            logger.warning(f"Tool '{tool_call.name}' permission error: {e}")
+            return ToolResult(
+                tool_use_id=tool_call.id,
+                content=f"Permission denied: {e}",
+                is_error=True,
+            )
         except Exception as e:
             logger.error(f"Tool '{tool_call.name}' error: {e}")
             return ToolResult(
@@ -363,6 +395,30 @@ class BaseAgent(ABC):
                 content=f"Error executing tool: {e}",
                 is_error=True,
             )
+
+    async def _check_tool_permission(self, tool_call: ToolCall):
+        """Check permission for a tool call."""
+        from permissions import get_permission_manager
+
+        pm = get_permission_manager()
+        return await pm.check_permission(
+            agent_name=self.name,
+            tool_name=tool_call.name,
+            input_data=tool_call.input,
+        )
+
+    async def _request_tool_approval(self, tool_call: ToolCall, permission_result) -> bool:
+        """Request approval for a tool call."""
+        from permissions import get_permission_manager
+
+        pm = get_permission_manager()
+        return await pm.request_approval(
+            agent_name=self.name,
+            tool_name=tool_call.name,
+            input_data=tool_call.input,
+            risk_level=permission_result.risk_level,
+            reason=permission_result.reason,
+        )
 
     def _build_user_message(
         self,
@@ -392,3 +448,40 @@ class BaseAgent(ABC):
         self._conversation_history = []
         self.status = AgentStatus.IDLE
         logger.debug(f"Agent '{self.name}' reset")
+
+    async def delegate(
+        self,
+        worker_type: str,
+        task: str,
+        context: Optional[dict[str, Any]] = None,
+    ) -> "AgentResult":
+        """
+        Delegate a subtask to a worker.
+
+        Args:
+            worker_type: Type of worker ("programmer", "reviewer", "documentor",
+                        "researcher", "executor")
+            task: The subtask to delegate
+            context: Optional context to pass to the worker
+
+        Returns:
+            AgentResult from the worker
+
+        Example:
+            >>> result = await lead.delegate("programmer", "Write auth decorator")
+            >>> if result.success:
+            ...     print(result.content)
+        """
+        from workers import get_worker
+
+        logger.info(f"Agent '{self.name}' delegating to {worker_type}: {task[:50]}...")
+
+        worker = get_worker(worker_type)
+        result = await worker.run(task, context)
+
+        if result.success:
+            logger.info(f"Worker {worker_type} completed successfully")
+        else:
+            logger.warning(f"Worker {worker_type} failed: {result.error}")
+
+        return result

@@ -13,6 +13,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",  # Ignore extra environment variables
     )
 
     # Application
@@ -27,6 +28,9 @@ class Settings(BaseSettings):
     # Server
     host: str = "127.0.0.1"
     port: int = 8765
+
+    # API Keys
+    anthropic_api_key: Optional[str] = None
 
     # Claude Code Integration (Optional)
     claude_code_oauth_token: Optional[str] = None
